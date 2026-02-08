@@ -1,20 +1,40 @@
 #!/bin/bash
 #SBATCH --account=def-istairs
-#SBATCH --time=10:00:00
+#SBATCH --time=3:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --array=0-7
-#SBATCH --output=/scratch/abernier/logs/scripts/%A_%a.out
+#SBATCH --output=/scratch/abernier/logs/scripts/%A.out
+
+# Load modules
+cd ~/scratch
+module load StdEnv/2023
+module load python/3.11.5
+module load scipy-stack/2024b
+echo "Modules loaded"
+
+# Load python environment
+source /home/abernier/envs/tril_env/bin/activate
+echo "Environment loaded"
 
 
+# Parameters
+SOURCE_DIR=/scratch/abernier/pulsar_data/2022_CHIME_B2111+46
+OBS_NIGHT=20220826T064420Z_CHIME_vdif
+SAVE_DIR=/scratch/abernier/pulsar_data/baseband_full_stokes
+START_FILE_IND=160
+NFILES=300
+FREQ_BANDS="4 5 6"
+NSAMPLES_PER_CHUNK=391
 
 
+# Run baseband formatter
+cd /home/abernier/scratch/rm-search-Bernier-2025
+echo "baseband_formatter.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_DIR} ${FREQ_BANDS}\
+      --start_file_ind ${START_FILE_IND} \
+      --nfiles ${NFILES} \
+      --num_time_samples ${NSAMPLES_PER_CHUNK}"
 
-
-# SOURCE_DIR = '/scratch/abernier/pulsar_data/2022_CHIME_B2111+46'
-# SAVE_DIR = '/scratch/abernier/pulsar_data/baseband_full_stokes'
-# START_FILE_IND = 160
-# NFILES = 300
-# FREQ_BANDS = [4,5,6]
-# NSAMPLES_PER_CHUNK = 100
-# NIGHT = '20220826T064420Z_CHIME_vdif'
+python baseband_formatter.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_DIR} ${FREQ_BANDS}\
+      --start_file_ind ${START_FILE_IND} \
+      --nfiles ${NFILES} \
+      --num_time_samples ${NSAMPLES_PER_CHUNK}

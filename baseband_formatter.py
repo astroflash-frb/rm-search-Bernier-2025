@@ -5,9 +5,6 @@ This script assumes the input data are organized using the directory/file format
     {source_dir}/{fband}/{obs_night}/*_0{fband}.vdif
 """
 
-
-# Imports
-# ------------------------------------------------------------------------------
 import argparse
 from pathlib import Path
 import glob
@@ -18,7 +15,6 @@ import chime_frb_constants as constants
 from baseband import vdif
 from baseband_tasks.shaping import Transpose, Reshape
 from baseband_tasks.functions import Power
-
 
 
 # Constants
@@ -47,7 +43,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "-f", 
-    "--num_files", 
+    "--nfiles", 
     type=int, 
     default=100, 
     help='Number of files to process.'
@@ -67,8 +63,16 @@ OBS_NIGHT = args.obs_night
 SAVE_DIR = args.save_dir
 FREQ_BANDS = args.freq_bands
 START_FILE_IND = args.start_file_ind
-NFILES = args.num_files
+NFILES = args.nfiles
 NSAMPLES_PER_CHUNK = args.num_time_samples
+
+print(f'\nProcessing source directory: {SOURCE_DIR}')
+print(f'Observation night: {OBS_NIGHT}')
+print(f'Saving results to: {SAVE_DIR}')
+print(f'Frequency bands: {FREQ_BANDS}')
+print(f'Starting from file index: {START_FILE_IND}')
+print(f'Number of files to process: {NFILES}')
+print(f'Number of time samples to average over: {NSAMPLES_PER_CHUNK}')
 
 
 # Functions
@@ -266,7 +270,7 @@ def read_files(source_dir, obs_night, freq_bands, start_file_ind=0, Nfiles=100, 
             fh = vdif.open(file, 'rs', sample_rate=SAMPLE_RATE)  
 
             # Add file data to band_data (Nfiles * array[Nstokes, Ntimes_file, Nfreqs])
-            get_data(fh, band_data, Nsamples_per_chunk)
+            get_data(fh, band_data, Nsamples_per_chunk=Nsamples_per_chunk)
 
             # Build time array (only for first band)
             if band_index==0:
@@ -287,28 +291,36 @@ def read_files(source_dir, obs_night, freq_bands, start_file_ind=0, Nfiles=100, 
     return full_data, time, freq
 
 
-# Processing data files
-# ------------------------------------------------------------------------------
-# Get Stokes data ((Nstokes, Ntimes, Nfreqs)
-full_stokes, time, freq = read_files(SOURCE_DIR, OBS_NIGHT,
-                                     freq_bands=FREQ_BANDS, 
-                                     start_file_ind=START_FILE_IND,
-                                     Nfiles=NFILES, 
-                                     Nsamples_per_chunk=NSAMPLES_PER_CHUNK)
+if __name__ == "__main__":
+    # Processing data files
+    # ------------------------------------------------------------------------------
+    # Get Stokes data ((Nstokes, Ntimes, Nfreqs)
+    full_stokes, time, freq = read_files(SOURCE_DIR, OBS_NIGHT,
+                                        freq_bands=FREQ_BANDS, 
+                                        start_file_ind=START_FILE_IND,
+                                        Nfiles=NFILES, 
+                                        Nsamples_per_chunk=NSAMPLES_PER_CHUNK)
 
 
-# Save data
-# ------------------------------------------------------------------------------
-# Create filename and full save path
-source_name = basename = os.path.basename(SOURCE_DIR)
-night_str = OBS_NIGHT.split('_')[0]
-freqs_str = "".join(map(str,FREQ_BANDS))
-save_filename = f'{night_str}_bands{freqs_str}_timeavg{NSAMPLES_PER_CHUNK}_{NFILES}files_start{START_FILE_IND}.npz'
-save_path = os.path.join(SAVE_DIR, source_name, save_filename)
+    # Save data
+    # ------------------------------------------------------------------------------
+    # Create filename and full save path
+    source_name = basename = os.path.basename(SOURCE_DIR)
+    night_str = OBS_NIGHT.split('_')[0]
+    freqs_str = "".join(map(str,FREQ_BANDS))
+    save_filename = f'{night_str}_bands{freqs_str}_timeavg{NSAMPLES_PER_CHUNK}_{NFILES}files_start{START_FILE_IND}.npz'
+    save_path = os.path.join(SAVE_DIR, source_name, save_filename)
 
-# Save data as .npz file
-os.makedirs(os.path.dirname(save_path), exist_ok=True)
-np.savez_compressed(save_path, 
-                    full_stokes=full_stokes, 
-                    time=time,
-                    freq=freq)
+    # Print info about the data being saved
+    print(f'Saving data with shape {full_stokes.shape} (Nstokes, Ntimes, Nfreqs)')
+    print(f'Time array shape: {time.shape}, Time range: {time[0]} to {time[-1]} seconds')
+    print(f'Time samples averaged over every {NSAMPLES_PER_CHUNK} samples (~{(NSAMPLES_PER_CHUNK / SAMPLE_RATE).to(u.ms):.2f})')
+    print(f'Frequency array shape: {freq.shape}, Frequency range: {freq[0]} to {freq[-1]} MHz')
+    print(f'Saving to: {save_path}')
+
+    # Save data as .npz file
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    np.savez_compressed(save_path, 
+                        full_stokes=full_stokes, 
+                        time=time,
+                        freq=freq)
