@@ -180,15 +180,15 @@ def get_spectra(Q, U, freq,  t_range=[0,None], f_range=[0,None], normalize=True,
     return Q_spec_norm, U_spec_norm
 
 
-def rm_synthesis(P_spec, lambda_sq, phi_array, W):
+def rm_synthesis(P_spec, phi_array, b):
     """
     Perform RM synthesis on the given P spectrum.
     
     Parameters
     ----------
     P_spec : Normalized complex P spectrum (shape: [Nfreqs,]).
-    lambda_sq : Squared wavelength array (shape: [Nfreqs,]). In m^2.
     phi_array : Array of phi values to compute the FDF for (shape: [N_phi,]). In rad.
+    b : Pre-computed exponential term for the FDF calculation (shape: [N_phi, Nfreqs]).
 
     Returns
     -------
@@ -197,12 +197,12 @@ def rm_synthesis(P_spec, lambda_sq, phi_array, W):
     """
 
     # Compute FDF
-    K = 1.0 / np.nansum(W)  # normalization constant
-    a = (-2.0 * 1j * phi_array).astype('complex64')
-    b = np.outer(a, lambda_sq)  # shape (Nphi, Nlambda2)
-    FDF = K * np.sum(P_spec * np.exp(b), 1)  # sum along lambda axis & normalize
+    # K = 1.0 / np.nansum(W)  # normalization constant
+    # a = (-2.0 * 1j * phi_array).astype('complex64')
+    # b = np.outer(a, lambda_sq)  # shape (Nphi, Nlambda2)
+    FDF = K * np.sum(P_spec * b, 1)  # sum along lambda axis & normalize
 
-    # Find peak phi (= RM)
+    # Find phi where peak FDF occurs (= RM)
     FDF_peak_ind = np.argmax(np.abs(FDF))
     RM_meas = phi_array[FDF_peak_ind]
 
@@ -289,7 +289,7 @@ if __name__ == "__main__":
     W[rfi_mask] = 0  # Set bad channels to zero
 
     # lambda^2 array
-    lambda2_array = (c.value/(freq*1e6))**2  # shape (Nfreqs)
+    lambda2_array = (c.value/(freq*1e6))**2  # Squared wavelength array (shape: [Nfreqs,]). In m^2.
     l2_min = np.min(lambda2_array)
     l2_max = np.max(lambda2_array)
     dl2 = np.median(np.abs(np.diff(lambda2_array)))
@@ -329,6 +329,11 @@ if __name__ == "__main__":
     RM_meas_arr = np.zeros(len(time_slice_arr))  # Store peak of FDF for each time slice
     FDF_arr = np.zeros((len(time_slice_arr), N_phi), dtype=complex)  # FDF for each time slice
 
+    # Pre-compute the exponential for the FDF calculation
+    K = 1.0 / np.nansum(W)  # normalization constant
+    a = (-2.0 * 1j * phi_array).astype('complex64')
+    b = np.exp(np.outer(a, lambda2_array))  # shape (Nphi, Nlambda2)
+
     # Step through time & compute FDF
     for i,start_time in enumerate(time_slice_arr):
         # Time slice indices
@@ -345,9 +350,8 @@ if __name__ == "__main__":
 
         # Compute FDF and RM for this time slice
         RM_meas_arr[i], FDF_arr[i] = rm_synthesis(P_spec_norm,
-                                                  lambda_sq=lambda2_array,
                                                   phi_array=phi_array,
-                                                  W=W
+                                                  b=b
                                                 )
     
     measure_stop("rm_search")
@@ -390,7 +394,7 @@ if __name__ == "__main__":
         lambda2_array=lambda2_array, 
         phi_array=phi_array,
         FDF_arr=FDF_arr, 
-        RM_meas_arr=RM_meas_arr, 
+        RM_meas_arr=RM_meas_arr, # phi where peak of FDF occurs, for each time slice
         time_slice_arr=time_slice_arr,
         cross_corr_arr=cross_corr_arr, 
         phi_lags=phi_lags,
