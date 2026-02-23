@@ -263,7 +263,7 @@ if __name__ == "__main__":
     # Load data
     full_stokes_npz = np.load(DATA_FILE)
 
-    full_stokes = full_stokes_npz['full_stokes']
+    full_stokes = full_stokes_npz['full_stokes']   # shape (Nstokes, Ntimes, Nfreqs)
     time = full_stokes_npz['time']
     freq = full_stokes_npz['freq']
 
@@ -389,18 +389,26 @@ if __name__ == "__main__":
     arrays_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_arrays.npz")
     np.savez_compressed(
         arrays_file, 
-        RMSF=RMSF, 
-        RMSF_full=RMSF_full, 
-        lambda2_array=lambda2_array, 
-        phi_array=phi_array,
-        FDF_arr=FDF_arr, 
-        RM_meas_arr=RM_meas_arr, # phi where peak of FDF occurs, for each time slice
-        time_slice_arr=time_slice_arr,
-        cross_corr_arr=cross_corr_arr, 
-        phi_lags=phi_lags,
-        rfi_mask=rfi_mask
+        stokes_norm_masked=stokes_norm_masked,  # shape (Nstokes, Ntimes, Nfreqs)
+        time=time,  # shape (Ntimes,)
+        freq=freq,  # shape (Nfreqs,)
+        rfi_mask=rfi_mask,  # shape (Nfreqs,)
+        RMSF=RMSF,  # shape (Nphi,)
+        RMSF_full=RMSF_full,  # shape (Nphi,)
+        lambda2_array=lambda2_array,  # shape (Nlambda,) = (Nfreq,)
+        phi_array=phi_array,  # shape (Nphi,)
+        FDF_arr=FDF_arr,  # shape (Ntimes_fdf, Nphi)
+        RM_meas_arr=RM_meas_arr, # phi where peak of FDF occurs, for each time slice. shape (Ntimes_fdf,)
+        time_slice_arr=time_slice_arr,  # shape (Ntimes_fdf,)
+        cross_corr_arr=cross_corr_arr,  # shape (Ntimes_fdf, Nphi)
+        phi_lags=phi_lags  # shape (Nlags,)
     )
     print(f"Saved RM search arrays to {arrays_file}")
+
+    # Compute some additional metrics for metadata
+    nsamples_per_chunk = int(DATA_FILE.name.split("_")[2][7:])   # num channels averaging from voltages->stokes
+    dt_stokes = (nsamples_per_chunk/SAMPLE_RATE).to(u.ms)  # time resolution of the Stokes data, in ms
+    df_stokes = (400/1024) * u.MHz  # total data time window, 1024 channels across 400 MHz bandwidth
 
     # Build metadata
     metadata = {
@@ -408,16 +416,21 @@ if __name__ == "__main__":
         'source': DATA_FILE.parent.name,
         'night': DATA_FILE.name.split("_")[0],
         'freq_bands': [int(f) for f in DATA_FILE.name.split("_")[1][5:]],
-        'nsamples_per_chunk': int(DATA_FILE.name.split("_")[2][7:]),
-        'stokes_time_sampling': (int(DATA_FILE.name.split("_")[2][7:]) / SAMPLE_RATE).to(u.ms),
+        'fmin': freq[0],
+        'fmax': freq[-1],
+        'df_stokes': df_stokes,
+        'nsamples_per_chunk': nsamples_per_chunk,
+        'dt_stokes': dt_stokes,
+        'delta_t_total': time[-1] - time[0],
         'nfiles': int(DATA_FILE.name.split("_")[3][:3]),
         'start_file_ind': int(DATA_FILE.name.split("_")[4][5:-4]),
         # RM search parameters
         'phi_max': PHI_MAX,
-        'dphi_scaling': DPHI_SCALING,
+        'dphi_scaling': DPHI_SCALING,  # dphi = scaling * FWHM
         'rfi_mean_threshold': RFI_MEAN_THRESHOLD,
         'rfi_std_threshold': RFI_STD_THRESHOLD,
-        'rm_time_step': RM_TIME_STEP,
+        'rm_time_step': RM_TIME_STEP,  # number of time channels averaged over during RM search
+        'dt_rm': RM_TIME_STEP * dt_stokes,  # effective time resolution of RM search results
         # SLURM info
         'slurm_info': {
             "job_id": os.environ.get("SLURM_JOB_ID"),
@@ -437,5 +450,5 @@ if __name__ == "__main__":
 
     # Save metadata
     metadata_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_metadata.npz")
-    np.savez(metadata_file, metadata=metadata)
+    np.savez(metadata_file, metadata=metadata)  # will need to unpack the metadata dict when opening
     print(f"Saved metadata to {metadata_file}")

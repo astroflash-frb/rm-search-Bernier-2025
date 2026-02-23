@@ -23,7 +23,7 @@ OBS_NIGHT=20220826T064420Z_CHIME_vdif
 SAVE_DIR=/scratch/abernier/pulsar_data/baseband_full_stokes
 START_FILE_IND=160
 NFILES=300
-FREQ_BANDS="4 5 6"
+FREQ_BANDS="6"  # Specify which frequency bands to process (e.g., "4 5 6" or "6")
 NSAMPLES_PER_CHUNK=391
 
 
