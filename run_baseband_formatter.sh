@@ -1,9 +1,12 @@
 #!/bin/bash
+#SBATCH --job-name=baseband_formatter
 #SBATCH --account=def-istairs
 #SBATCH --time=3:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --output=/scratch/abernier/logs/scripts/%A.out
+#SBATCH --mail-user=audreanne.bernier@mail.mcgill.ca
+#SBATCH --mail-type=ALL
 
 # Load modules
 cd ~/scratch

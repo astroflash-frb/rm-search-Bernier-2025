@@ -54,7 +54,7 @@ parser.add_argument(
     help='Threshold for std-based RFI flagging (default: 5.0).'
 )
 parser.add_argument(
-    "--rm_time_step", 
+    "--search_time_step", 
     type=int, 
     default=10, 
     help='Number of time channels to average over during RM search (default: 10).'
@@ -69,7 +69,7 @@ PHI_MAX = args.phi_max
 DPHI_SCALING = args.dphi_scaling
 RFI_MEAN_THRESHOLD = args.rfi_mean_threshold
 RFI_STD_THRESHOLD = args.rfi_std_threshold
-RM_TIME_STEP = args.rm_time_step
+SEARCH_TIME_STEP = args.search_time_step
 
 # Other Constants & Globals
 SAMPLE_RATE = constants.FPGA_COUNTS_PER_SECOND * u.Hz
@@ -322,8 +322,8 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------
     measure_start("rm_search")
 
-    # Split time array into slices of length RM_TIME_STEP
-    time_slice_arr = time[::RM_TIME_STEP]  # New time array (using start times of each time slice)
+    # Split time array into slices of length SEARCH_TIME_STEP
+    time_slice_arr = time[::SEARCH_TIME_STEP]  # New time array (using start times of each time slice)
 
     # Set up arrays for results
     RM_meas_arr = np.zeros(len(time_slice_arr))  # Store peak of FDF for each time slice
@@ -338,7 +338,7 @@ if __name__ == "__main__":
     for i,start_time in enumerate(time_slice_arr):
         # Time slice indices
         t_start_ind = np.argwhere(time==start_time)[0][0]
-        t_stop_ind = t_start_ind + RM_TIME_STEP
+        t_stop_ind = t_start_ind + SEARCH_TIME_STEP
 
         # Get the spectra (avg over time slice)
         Q_spec_norm, U_spec_norm = get_spectra(stokes_norm_masked[1].T, 
@@ -429,8 +429,8 @@ if __name__ == "__main__":
         'dphi_scaling': DPHI_SCALING,  # dphi = scaling * FWHM
         'rfi_mean_threshold': RFI_MEAN_THRESHOLD,
         'rfi_std_threshold': RFI_STD_THRESHOLD,
-        'rm_time_step': RM_TIME_STEP,  # number of time channels averaged over during RM search
-        'dt_rm': RM_TIME_STEP * dt_stokes,  # effective time resolution of RM search results
+        'search_time_step': SEARCH_TIME_STEP,  # number of time *channels* averaged over during RM search
+        'dt_rm': SEARCH_TIME_STEP * dt_stokes,  # effective time resolution of RM search results
         # SLURM info
         'slurm_info': {
             "job_id": os.environ.get("SLURM_JOB_ID"),
