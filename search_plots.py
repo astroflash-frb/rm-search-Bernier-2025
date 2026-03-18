@@ -47,9 +47,9 @@ parser.add_argument("param", type=str,
 parser.add_argument(
     "-r", 
     "--rm_true", 
-    type=int, 
+    type=float, 
     nargs='+', 
-    default=None,  
+    default=0.,  
     help='True RM value(s) to plot as vertical line(s) on the ross-correlation slices plot.'
 )
 args = parser.parse_args()
@@ -255,6 +255,7 @@ def plot_stokes(data_array, freq, time, t_unit='ms', suptitle='',
     # --- Save Figure --
     if save_name is not None:
         plt.savefig(save_loc + save_name)
+    plt.close()
     
 
 def plot_rmsf(phi_array, RMSF, RMSF_full, save_loc=SAVE_FIG_DIR, save_name='RMSF'):
@@ -271,6 +272,7 @@ def plot_rmsf(phi_array, RMSF, RMSF_full, save_loc=SAVE_FIG_DIR, save_name='RMSF
 
     if save_name is not None:
         plt.savefig(save_loc + save_name, dpi=300)
+    plt.close()
 
 
 def plot_2panels(data, time, phi, cbar_label='', time_true=None, height_ratios=[1, 3],
@@ -345,6 +347,7 @@ def plot_2panels(data, time, phi, cbar_label='', time_true=None, height_ratios=[
     # --- Save Figure --
     if save_name is not None:
         plt.savefig(save_loc + save_name, dpi=300)
+    plt.close()
 
 
 def plot_cross_corr_slices(phi_lags, cross_corr_arr, known_bursts_inds=None, true_RM=None,
@@ -384,6 +387,7 @@ def plot_cross_corr_slices(phi_lags, cross_corr_arr, known_bursts_inds=None, tru
 
     if save_name is not None:
         plt.savefig(save_loc + save_name, dpi=300)
+    plt.close()
     
 
 def scale_lightness(rgb, scale_l):
@@ -505,6 +509,7 @@ def plot_time_curves_by_block(param_arr, dict_list, x_label, fig_title=None,
     # -- Save figure --
     if save_name is not None:
         plt.savefig(save_loc + save_name, dpi=300)
+    plt.close()
 
 
 def plot_efficiency_by_block(param_arr, dict_list, x_label, fig_title=None, 
@@ -587,6 +592,7 @@ def plot_efficiency_by_block(param_arr, dict_list, x_label, fig_title=None,
     # -- Save figure --
     if save_name is not None:
         plt.savefig(save_loc + save_name, dpi=300)
+    plt.close()
 
 
 
@@ -660,14 +666,14 @@ if __name__ == "__main__":
                     cbar_label='Amplitude', suptitle='FDF', save_name=f'FDF_{PARAM}{param_list[i]}')
         
     
-    # Plot Cross-Correlations for each parameter
+    # Plot cross-correlations for each parameter
     for i in range(NFILES):
         plot_2panels(cross_corr_arr[i], time_slice_arr[i], phi_lags[i], ax2_ylabel=r'$\phi$ [rad/m$^2$]', 
                      cbar_label='Amplitude', ax1_type='peak', suptitle='Cross-correlation', ylim=(-1500,1500),
                      save_name=f'crosscorr_{PARAM}{param_list[i]}')
     
 
-    # Plot cross-sorrelation slices
+    # Plot cross-correlation slices
     for i in range(NFILES):
         plot_cross_corr_slices(phi_lags[i], cross_corr_arr[i], 
                                true_RM = [RM_TRUE],

@@ -35,7 +35,7 @@ RFI_STD_THRESHOLD=1.3
 SEARCH_TIME_STEP=${STEP_LIST[$INDEX]}  # Vary this parameter across array jobs
 
 # Input data path
-TIME_RES=25000  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
+TIME_RES=391  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
 DATA_DIR=/scratch/abernier/pulsar_data/baseband_full_stokes/2022_CHIME_B2111+46
 SETTINGS=bands6_timeavg${TIME_RES}_300files_start160
 DATA_FILE=${DATA_DIR}/20220826T064420Z_${SETTINGS}.npz

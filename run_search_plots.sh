@@ -21,11 +21,13 @@ echo "Environment loaded"
 
 
 # Parameters
-SETTINGS=20220826T064420Z_bands6_timeavg25000_300files_start160  # Specify which Stokes data was used in the search
+TIME_RES=391  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
+SETTINGS=20220826T064420Z_bands6_timeavg${TIME_RES}_300files_start160  # Specify which Stokes data was used in the search
 PARAM=timestep  # Specify which parameter was varied in the search results to plot
+RM_TRUE=-218.70
 
 # Run Ploting Script
 cd /home/abernier/scratch/rm-search-Bernier-2025
-echo "search_plots.py ${SETTINGS} ${PARAM}"
+echo "search_plots.py ${SETTINGS} ${PARAM} --rm_true ${RM_TRUE}"
 
-python search_plots.py ${SETTINGS} ${PARAM}
+python search_plots.py ${SETTINGS} ${PARAM} --rm_true ${RM_TRUE}
