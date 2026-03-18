@@ -1,5 +1,6 @@
 """
-Script for plotting results of RM search when varying a single parameter. 
+Script for plotting *all* results of RM search when varying a single parameter. 
+
 """
 
 # Imports

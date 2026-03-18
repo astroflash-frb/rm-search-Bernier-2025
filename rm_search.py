@@ -3,7 +3,6 @@ Perform an RM search on the given full Stokes data.
 """
 
 import argparse
-import time
 from time import perf_counter, process_time
 import os
 import psutil
@@ -72,6 +71,7 @@ RFI_STD_THRESHOLD = args.rfi_std_threshold
 SEARCH_TIME_STEP = args.search_time_step
 
 # Other Constants & Globals
+RFI_RANGES = [(529,535), (483, 483), (452,452)]  # in MHz
 SAMPLE_RATE = constants.FPGA_COUNTS_PER_SECOND * u.Hz
 TIMINGS = {}
 _process = psutil.Process(os.getpid())
@@ -80,7 +80,28 @@ _process = psutil.Process(os.getpid())
 
 # Functions
 # ------------------------------------------------------------------------------
-def get_rfi_mask(intensity_array, mean_treshhold=2, std_threshold=5):
+def flag_rfi_manual(ranges, freqs):
+    """
+    ranges : list of tuples
+        list of (start,end) frequencies to mask
+    """
+    channel_mask_manual = np.full(len(freqs), False)
+    
+    for (start,end) in ranges:
+        # Check that freqs to mask are at least particlaly contained in the frequency array
+        if start > freq[-1] or end < freqs[0]:  # completely out of range
+            continue
+
+        if start == end:
+            end += freqs[1] - freqs[0]
+
+        mask = (start <= freqs) & (freqs <= end)
+        channel_mask_manual |= mask  
+
+    return channel_mask_manual
+        
+
+def get_rfi_mask(intensity_array, mean_treshhold=2, std_threshold=5, ranges=None, freqs=None):
     """
     Flag frequency channels with anomalous statistics across time, such as unusually high
     mean or standard deviation, which may indicate RFI. Returns a boolean mask.
@@ -111,9 +132,17 @@ def get_rfi_mask(intensity_array, mean_treshhold=2, std_threshold=5):
     # Normalize & compare channel stds
     stds_norm = (std_per_channel - np.mean(std_per_channel)) / np.std(std_per_channel)
     channel_mask_std = np.abs(stds_norm) > std_threshold
+
+    # Manually mask some channels
+    cond_manual = (ranges is not None) and (freqs is not None)
+    if cond_manual:
+        channel_mask_manual = flag_rfi_manual(ranges, freqs)
     
     # Combine masks
-    channel_mask = channel_mask_mean | channel_mask_std
+    if cond_manual:
+        channel_mask = channel_mask_mean | channel_mask_std | channel_mask_manual
+    else:
+        channel_mask = channel_mask_mean | channel_mask_std
 
     return channel_mask
 
@@ -270,7 +299,8 @@ if __name__ == "__main__":
     # Get RFI mask using intensity data
     rfi_mask = get_rfi_mask(full_stokes[0], 
                             mean_treshhold=RFI_MEAN_THRESHOLD, 
-                            std_threshold=RFI_STD_THRESHOLD)
+                            std_threshold=RFI_STD_THRESHOLD,
+                            ranges=RFI_RANGES, freqs=freq)
 
     # Normalize & mask RFI channels
     stokes_norm_masked = normalize_data(full_stokes.copy())
@@ -388,7 +418,7 @@ if __name__ == "__main__":
     # Save data arrays
     arrays_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_arrays.npz")
     np.savez_compressed(
-        arrays_file, 
+        arrays_file,   # filename
         stokes_norm_masked=stokes_norm_masked,  # shape (Nstokes, Ntimes, Nfreqs)
         time=time,  # shape (Ntimes,)
         freq=freq,  # shape (Nfreqs,)
@@ -408,7 +438,7 @@ if __name__ == "__main__":
     # Compute some additional metrics for metadata
     nsamples_per_chunk = int(DATA_FILE.name.split("_")[2][7:])   # num channels averaging from voltages->stokes
     dt_stokes = (nsamples_per_chunk/SAMPLE_RATE).to(u.ms)  # time resolution of the Stokes data, in ms
-    df_stokes = (400/1024) * u.MHz  # total data time window, 1024 channels across 400 MHz bandwidth
+    df_stokes = (400/1024) * u.MHz  # frequency resolution, 1024 channels across 400 MHz bandwidth
 
     # Build metadata
     metadata = {
@@ -418,19 +448,19 @@ if __name__ == "__main__":
         'freq_bands': [int(f) for f in DATA_FILE.name.split("_")[1][5:]],
         'fmin': freq[0],
         'fmax': freq[-1],
-        'df_stokes': df_stokes,
-        'nsamples_per_chunk': nsamples_per_chunk,
-        'dt_stokes': dt_stokes,
-        'delta_t_total': time[-1] - time[0],
-        'nfiles': int(DATA_FILE.name.split("_")[3][:3]),
-        'start_file_ind': int(DATA_FILE.name.split("_")[4][5:-4]),
+        'df_stokes': df_stokes,  # frequency resolution of the Stokes data, in MHz
+        'nsamples_per_chunk': nsamples_per_chunk,  # number of channels averaged together to get the Stokes data from the voltages
+        'dt_stokes': dt_stokes,  # time resolution of the Stokes data, in ms
+        'delta_t_total': time[-1] - time[0],  # total time duration of the data, in seconds
+        'nfiles': int(DATA_FILE.name.split("_")[3][:3]),  # number of files read in
+        'start_file_ind': int(DATA_FILE.name.split("_")[4][5:-4]),  # index of first fild read (relative to raw baseband files)
         # RM search parameters
         'phi_max': PHI_MAX,
         'dphi_scaling': DPHI_SCALING,  # dphi = scaling * FWHM
         'rfi_mean_threshold': RFI_MEAN_THRESHOLD,
         'rfi_std_threshold': RFI_STD_THRESHOLD,
         'search_time_step': SEARCH_TIME_STEP,  # number of time *channels* averaged over during RM search
-        'dt_rm': SEARCH_TIME_STEP * dt_stokes,  # effective time resolution of RM search results
+        'dt_rm': SEARCH_TIME_STEP * dt_stokes,  # effective time resolution of RM search results in ms
         # SLURM info
         'slurm_info': {
             "job_id": os.environ.get("SLURM_JOB_ID"),

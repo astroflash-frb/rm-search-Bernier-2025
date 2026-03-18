@@ -27,7 +27,7 @@ SAVE_DIR=/scratch/abernier/pulsar_data/baseband_full_stokes
 START_FILE_IND=160
 NFILES=300
 FREQ_BANDS="6"  # Specify which frequency bands to process (e.g., "4 5 6" or "6")
-NSAMPLES_PER_CHUNK=391
+NSAMPLES_PER_CHUNK=25000  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
 
 
 # Run baseband formatter

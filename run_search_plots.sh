@@ -21,7 +21,7 @@ echo "Environment loaded"
 
 
 # Parameters
-SETTINGS=20220826T064420Z_bands456_timeavg391_300files_start160  # Specify which Stokes data was used in the search
+SETTINGS=20220826T064420Z_bands6_timeavg25000_300files_start160  # Specify which Stokes data was used in the search
 PARAM=timestep  # Specify which parameter was varied in the search results to plot
 
 # Run Ploting Script

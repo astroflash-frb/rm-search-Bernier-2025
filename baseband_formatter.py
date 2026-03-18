@@ -19,7 +19,7 @@ from baseband_tasks.functions import Power
 
 # Constants
 # ------------------------------------------------------------------------------
-SAMPLE_RATE = constants.FPGA_COUNTS_PER_SECOND * u.Hz
+SAMPLE_RATE = constants.FPGA_COUNTS_PER_SECOND * u.Hz  # samples per second (time axis sampling)
 FCENS = np.linspace(775, 425, 8) # * u.MHz
 
 
