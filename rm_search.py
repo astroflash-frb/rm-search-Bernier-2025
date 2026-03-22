@@ -27,6 +27,13 @@ parser.add_argument("save_file", type=Path,
 
 # Optional
 parser.add_argument(
+    "-s", 
+    "--sim_file", 
+    type=Path, 
+    default=None, 
+    help='File of simulated stokes parameters to inject bursts into data.'
+)
+parser.add_argument(
     "-p", 
     "--phi_max", 
     type=int, 
@@ -64,6 +71,7 @@ args = parser.parse_args()
 # Assign arguments to variables
 DATA_FILE = args.data_file
 SAVE_FILE = args.save_file
+SIM_FILE = args.sim_file
 PHI_MAX = args.phi_max
 DPHI_SCALING = args.dphi_scaling
 RFI_MEAN_THRESHOLD = args.rfi_mean_threshold
@@ -306,6 +314,14 @@ if __name__ == "__main__":
     stokes_norm_masked = normalize_data(full_stokes.copy())
     stokes_norm_masked[:,:,rfi_mask] = np.nan
 
+    # Inject bursts from sim file, if provided
+    sim_params = None
+    if SIM_FILE is not None:
+        sim_data = np.load(SIM_FILE, all)
+        stokes_sim = sim_data['full_stokes']  # shape (Nstokes, Ntimes, Nfreqs)
+        stokes_norm_masked += stokes_sim
+        sim_params = sim_data['params']
+
     measure_stop("load_mask_normalize")
 
 
@@ -470,7 +486,9 @@ if __name__ == "__main__":
             "cpus_per_task": int(os.environ.get("SLURM_CPUS_PER_TASK", 1)),
         },
         # Timings
-        'timings': TIMINGS
+        'timings': TIMINGS,
+        # Injected bursts info
+        'sim_params': sim_params  # parameters of injected bursts from sim file, if provided
     }
 
     # Print metrics

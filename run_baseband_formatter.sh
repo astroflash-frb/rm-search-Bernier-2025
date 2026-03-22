@@ -19,16 +19,16 @@ echo "Modules loaded"
 source /home/abernier/envs/tril_env/bin/activate
 echo "Environment loaded"
 
-
-# Parameters
+# Directories
 SOURCE_DIR=/scratch/abernier/pulsar_data/2022_CHIME_B2111+46
 OBS_NIGHT=20220826T064420Z_CHIME_vdif
-SAVE_DIR=/scratch/abernier/pulsar_data/baseband_full_stokes
+SAVE_DIR=/scratch/abernier/pulsar_data/full_stokes
+
+# Parameters
 START_FILE_IND=160
 NFILES=300
 FREQ_BANDS="6"  # Specify which frequency bands to process (e.g., "4 5 6" or "6")
-NSAMPLES_PER_CHUNK=25000  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
-
+NSAMPLES_PER_CHUNK=25000  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution **one at a time
 
 # Run baseband formatter
 cd /home/abernier/scratch/rm-search-Bernier-2025
