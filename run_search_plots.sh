@@ -22,9 +22,9 @@ echo "Environment loaded"
 
 # Parameters
 TIME_RES=391  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
-SETTINGS=20220826T064420Z_bands6_timeavg${TIME_RES}_300files_start160  # Specify which Stokes data was used in the search
+SETTINGS=20220826T064420Z_SIM_bands6_timeavg${TIME_RES}_300files_start160  # Specify which Stokes data was used in the search
 PARAM=timestep  # Specify which parameter was varied in the search results to plot
-RM_TRUE=-218.70
+RM_TRUE="-218.70 -120 500"
 
 # Run Ploting Script
 cd /home/abernier/scratch/rm-search-Bernier-2025

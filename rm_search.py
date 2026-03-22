@@ -317,7 +317,7 @@ if __name__ == "__main__":
     # Inject bursts from sim file, if provided
     sim_params = None
     if SIM_FILE is not None:
-        sim_data = np.load(SIM_FILE, all)
+        sim_data = np.load(SIM_FILE, allow_pickle=True)
         stokes_sim = sim_data['full_stokes']  # shape (Nstokes, Ntimes, Nfreqs)
         stokes_norm_masked += stokes_sim
         sim_params = sim_data['params']

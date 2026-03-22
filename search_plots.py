@@ -676,7 +676,7 @@ if __name__ == "__main__":
     # Plot cross-correlation slices
     for i in range(NFILES):
         plot_cross_corr_slices(phi_lags[i], cross_corr_arr[i], 
-                               true_RM = [RM_TRUE],
+                               true_RM = RM_TRUE,
                                save_name=f'crosscorr_slices_{PARAM}{param_list[i]}'
                                )
     
