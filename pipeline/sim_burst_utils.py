@@ -1,0 +1,163 @@
+"""
+Utility functions for simulating bursts.
+"""
+
+import numpy as np
+from fitburst.analysis.model import SpectrumModeler
+from astropy.constants import c
+
+def compute_timeseries_sigma(full_stokes):
+    """
+    Compute statistics for raw freq-averaged timeseries, returning the standard deviation.
+    """
+    I_real = full_stokes[0]  # (Ntimes, Nfreqs)
+    I_real_avg = np.nanmean(I_real, axis=1)  # avg over freqs, (Ntimes,)
+    sigma_time = np.nanstd(I_real_avg)  # noise level in time series
+
+    return sigma_time
+
+
+def gen_sim_burst_params(num_bursts, arrival_times, burst_widths, freq):
+    """
+    Generate parameters for simulating bursts with fitburst.
+
+    num_bursts : int
+        Number of bursts to simulate.
+    arrival_times : list of floats
+        List of arrival times for the simulated bursts (in seconds, or whatever time unit the data uses). 
+        Must be contained within the time range of the input data.
+    burst_widths : list of floats
+        List of widths for the simulated bursts (in seconds, or whatever time unit the data uses).
+    
+    """
+
+    ref_freq = np.median(freq)
+    burst_params = []
+
+    for i in range(num_bursts):
+        burst_params_i = {
+            "amplitude"            : [0.],  # overall signal amplitude (in Base-10 exponent)
+            "arrival_time"         : [arrival_times[i]],  # when burst starts
+            "burst_width"          : [burst_widths[i]],  # width in time (eg. 0.5 will be 0.5 in whatever unit the given time axis has)
+            "dm"                   : [0.],
+            "dm_index"             : [-2.],  # don't touch 
+            "ref_freq"             : [ref_freq],  # ref freq for arrival-time and power-law param estimates
+            "scattering_index"     : [-4.],  # index of the scattering timescale, don't touch
+            "scattering_timescale" : [0.],  # don't touch
+            "spectral_index"       : [0.],  # how flat across frequency
+            "spectral_running"     : [-10.],  # additional curvature
+        }
+        burst_params.append(burst_params_i)
+
+    return burst_params
+
+
+def gen_stokes_I(num_bursts, burst_params, freq, time, sigma_time):
+    """
+    Generate Stokes I data for simulated bursts, scaled to the desired SNR in the raw timeseries data.
+
+    Returns an array of shape (Nbursts, Nfreqs, Ntimes) containing the Stokes I data for each simulated burst.
+    """
+
+    I_components = np.empty((num_bursts, len(freq), len(time)))  # Scaled bursts, (Nbursts, Nfreqs, Ntimes)
+    A = [2, 10]  # desired SNRs in intensity
+
+    for i in range(num_bursts):
+        # Generate model & update parameters
+        model = SpectrumModeler(freq, time)
+        model.update_parameters(burst_params[i])
+        
+        # Get model spectrum (Stokes I)
+        burst_i = model.compute_model()  # (Nfreqs, Ntimes)
+
+        # Scale to SNR of raw timeseries
+        burst_avg = np.nanmean(burst_i, axis=0)  # burst timeseries, (Ntimes,)
+        peak_model = np.max(burst_avg)  # peak in timeseries
+        scale = A[i] * sigma_time / peak_model  # to scale peak in timeseries by Aσ
+        I_components[i] = scale * burst_i  # eg. 5σ * model burst (of amplitude 1)
+
+    return I_components
+
+
+def gen_stokes_QUV(I_components, num_bursts, pol_frac_linear, pol_frac_circular, psi_0_rad):
+    """
+    Generate Stokes Q, U, and V data for simulated bursts, using stokes I.
+    """
+
+    # I, shape (Nfreqs, Ntimes)
+    I_sim = np.sum(I_components, axis=0)
+
+    # Q and U, shapes (Nbursts, Nfreqs, Ntimes)
+    Q_components = np.zeros_like(I_components) 
+    U_components = np.zeros_like(I_components)
+    for i in range(num_bursts):
+        Q_components[i] = I_components[i] * pol_frac_linear[i] * np.cos(2 * psi_0_rad)  # Q = I p_lin cos(2*psi_0)
+        U_components[i] = I_components[i] * pol_frac_linear[i] * np.sin(2 * psi_0_rad)  # U = I p_lin sin(2*psi_0)
+
+    # V, shape (Nfreqs, Ntimes)
+    V_sim = I_sim * pol_frac_circular  # V = I p_circ
+
+    return I_sim, Q_components, U_components, V_sim
+
+
+def apply_rm(I, Q, U, RM, freq):
+    """
+    Apply rotation measure to Stokes Q and U.
+
+    Return the rotated Q and U parameters.
+
+    Parameters
+    ----------
+    I : Stokes I intensity (shape: [Nfreqs, Ntimes]).
+    Q : Stokes Q parameter (shape: [Nfreqs, Ntimes]).
+    U : Stokes U parameter (shape: [Nfreqs, Ntimes]).
+    RM : Rotation measure (shape: [Nfreqs]). In rad/m^2.
+    freq : Frequency array (shape: [Nfreqs]). In MHz.
+    """
+    # Change zeros to NaN in off-burst region
+    mask = (I < 1e-7)  # approx that off-burst is where 1e-7
+    Q[mask] = np.nan
+    U[mask] = np.nan
+    # plot_stokes([I, Q, U, V], suptitle='After masking off-burst region')
+
+    # dpsi = 2RM * lambda^2
+    lambda_sq = (c.value/(freq*1e6))**2  # shape (Nfreqs)
+    dpsi = 2 * RM * lambda_sq
+
+    # Rotate Q and U
+    cos_dpsi = np.cos(dpsi)[:, np.newaxis]  # shape (Nfreqs, 1)
+    sin_dpsi = np.sin(dpsi)[:, np.newaxis]  # shape (Nfreqs, 1)
+
+    Q_rot = Q*cos_dpsi - U*sin_dpsi
+    U_rot = Q*sin_dpsi + U*cos_dpsi
+
+    # Switch back NaNs to 0
+    Q_rot = np.nan_to_num(Q_rot)
+    U_rot = np.nan_to_num(U_rot)
+
+    return Q_rot, U_rot
+
+
+def get_rot_stokes(I_components, Q_components, U_components, num_bursts, RM, freq):
+    """
+    Apply RM to the Stokes Q and U components of each simulated burst, and combine them into arrays of shape (Nfreqs, Ntimes).
+    """
+
+    # Arrays to fill, shape (Nbursts, Nfreqs, Ntimes)
+    Q_rot_components = np.zeros_like(Q_components)
+    U_rot_components = np.zeros_like(U_components)
+
+    # Apply RM to each burst's Q and U components
+    for i in range(num_bursts):
+        Q_rot_components[i], U_rot_components[i] = apply_rm(I_components[i], 
+                                                            Q_components[i], 
+                                                            U_components[i], 
+                                                            RM[i], freq
+                                                        )
+
+    # Combine rotated components into arrays of shape (Nfreqs, Ntimes)
+    # **Note: opposite shape from loaded baseband data
+    Q_rot = np.sum(Q_rot_components, axis=0)
+    U_rot = np.sum(U_rot_components, axis=0)
+
+    return Q_rot, U_rot

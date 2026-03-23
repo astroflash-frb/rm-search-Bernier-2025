@@ -2,6 +2,8 @@
 Perform an RM search on the given full Stokes data.
 """
 
+from rm_search_utils import *  # Import all functions from rm_utils.py
+from sim_burst_utils import *  # Import all functions from sim_burst_utils.py
 import argparse
 from time import perf_counter, process_time
 import os
@@ -26,13 +28,6 @@ parser.add_argument("save_file", type=Path,
                     help='Absolute path to save .npz file with RM search results.')
 
 # Optional
-parser.add_argument(
-    "-s", 
-    "--sim_file", 
-    type=Path, 
-    default=None, 
-    help='File of simulated stokes parameters to inject bursts into data.'
-)
 parser.add_argument(
     "-p", 
     "--phi_max", 
@@ -65,18 +60,68 @@ parser.add_argument(
     default=10, 
     help='Number of time channels to average over during RM search (default: 10).'
 )
+parser.add_argument(
+    "--sim_flag",
+    type=int,
+    default=0,
+    help='Set to 1 to inject simulated bursts, 0 to run without (default: 0).'
+)
+parser.add_argument(
+    "--n_bursts",
+    type=int,
+    default=0,
+    help='Number of simulated bursts to inject if sim_flag=1 (default: 2).'
+)
+parser.add_argument(
+    "--sim_arrival_times",
+    type=float,
+    nargs='+',
+    default=None,
+    help='List of times (in seconds) at which to inject simulated bursts, if sim_flag=1. Must be contained within the time range of the input data.'
+)
+parser.add_argument(
+    "--sim_burst_widths",
+    type=float,
+    nargs='+',
+    default=None,
+    help='List of widths (in seconds) for the simulated bursts to inject, if sim_flag=1.'
+)
+parser.add_argument(
+    "--sim_snr",
+    type=float,
+    nargs='+',
+    default=None,
+    help='List of SNRs for the simulated bursts to inject (relative to noise in real timeseries data), if sim_flag=1.'
+)
+parser.add_argument(
+    "--sim_rm",
+    type=float,
+    nargs='+',
+    default=None,
+    help='List of RMs (in rad/m^2) for the simulated bursts to inject, if sim_flag=1.'
+)
 
 args = parser.parse_args()
 
-# Assign arguments to variables
+# Files
 DATA_FILE = args.data_file
 SAVE_FILE = args.save_file
-SIM_FILE = args.sim_file
+
+# Search parameters
 PHI_MAX = args.phi_max
 DPHI_SCALING = args.dphi_scaling
 RFI_MEAN_THRESHOLD = args.rfi_mean_threshold
 RFI_STD_THRESHOLD = args.rfi_std_threshold
 SEARCH_TIME_STEP = args.search_time_step
+
+# Simulation parameters 
+SIM_FLAG = args.sim_flag
+N_BURSTS = args.n_bursts
+SIM_ARRIVAL_TIMES = args.sim_arrival_times
+SIM_BURST_WIDTHS = args.sim_burst_widths
+SIM_SNR = args.sim_snr
+SIM_RM = args.sim_rm
+SIM_PARAMS = None  # to be filled with sim params if SIM_FLAG=1
 
 # Other Constants & Globals
 RFI_RANGES = [(529,535), (483, 483), (452,452)]  # in MHz
@@ -86,166 +131,8 @@ _process = psutil.Process(os.getpid())
 
 
 
-# Functions
+# Timing Functions
 # ------------------------------------------------------------------------------
-def flag_rfi_manual(ranges, freqs):
-    """
-    ranges : list of tuples
-        list of (start,end) frequencies to mask
-    """
-    channel_mask_manual = np.full(len(freqs), False)
-    
-    for (start,end) in ranges:
-        # Check that freqs to mask are at least particlaly contained in the frequency array
-        if start > freq[-1] or end < freqs[0]:  # completely out of range
-            continue
-
-        if start == end:
-            end += freqs[1] - freqs[0]
-
-        mask = (start <= freqs) & (freqs <= end)
-        channel_mask_manual |= mask  
-
-    return channel_mask_manual
-        
-
-def get_rfi_mask(intensity_array, mean_treshhold=2, std_threshold=5, ranges=None, freqs=None):
-    """
-    Flag frequency channels with anomalous statistics across time, such as unusually high
-    mean or standard deviation, which may indicate RFI. Returns a boolean mask.
-    
-    Parameters
-    ----------
-    intensity_array : np.ndarray
-        Normalized intensity data with shape (Ntimes, Nfreqs), where each column is a frequency channel.
-    mean_threshold : float
-        Threshold for the absolute value of the mean. Channels with |mean| > mean_threshold are flagged.
-    std_threshold : float
-        Threshold for the standard deviation. Channels with std > std_threshold are flagged.
-    
-    Returns
-    -------
-    channel_mask : np.ndarray
-        Boolean array of shape (Nfreqs,) where True indicates a flagged (to be masked) frequency channel.
-    """
-
-    # Mean and std per frequency channel (avg across time)
-    mean_per_channel = np.nanmean(intensity_array, axis=0)
-    std_per_channel = np.nanstd(intensity_array, axis=0)
-
-    # Normalize & compare channel means
-    means_norm = (mean_per_channel - np.mean(mean_per_channel)) / np.std(mean_per_channel)
-    channel_mask_mean = np.abs(means_norm) > mean_treshhold
-
-    # Normalize & compare channel stds
-    stds_norm = (std_per_channel - np.mean(std_per_channel)) / np.std(std_per_channel)
-    channel_mask_std = np.abs(stds_norm) > std_threshold
-
-    # Manually mask some channels
-    cond_manual = (ranges is not None) and (freqs is not None)
-    if cond_manual:
-        channel_mask_manual = flag_rfi_manual(ranges, freqs)
-    
-    # Combine masks
-    if cond_manual:
-        channel_mask = channel_mask_mean | channel_mask_std | channel_mask_manual
-    else:
-        channel_mask = channel_mask_mean | channel_mask_std
-
-    return channel_mask
-
-
-def normalize_data(data_array):
-    """
-    Normalize data by subtracting the mean and dividing by the standard deviation,
-    computed per frequency channel (over time) for each Stokes parameter.
-
-    Parameters
-    ----------
-    data_array : np.ndarray
-        Array of data to normalize (shape: [Nstokes, Ntimes, Nfreqs]).
-
-    Returns
-    -------
-    data_normalized : np.ndarray
-        Normalized array of the same shape
-    """
-    
-    mean_per_channel = np.nanmean(data_array, axis=1, keepdims=True)
-    std_per_channel = np.nanstd(data_array, axis=1, keepdims=True)
-    
-    return (data_array - mean_per_channel) / std_per_channel
-
-
-def get_spectra(Q, U, freq,  t_range=[0,None], f_range=[0,None], normalize=True, replace_nans=True):
-    """
-    Calculate (normalized) Q and U spectra.
-    Returns normalized Q and U spectra averaged over the specified time range.
-
-    Parameters
-    ----------
-    Q : Stokes Q array (shape: [Nfreqs, Ntimes]).
-    U : Stokes U array (shape: [Nfreqs, Ntimes]).
-    freq : Frequency array (in MHz), matches Nfreqs.
-    t_range : Time range to average over (in indices) [start, stop].
-    f_range : Frequency range to get the spectrum for (in indices) [start, stop].
-    normalize : If True, normalize the spectra by L.
-    replace_nans : If True, replace NaNs with 0 in the normalized spectra.
-    """
-    
-    # Time average
-    f_start, f_stop = f_range
-    freq = freq[f_start:f_stop]
-    t_start, t_stop = t_range
-    Q_spec = np.nanmean((Q)[f_start:f_stop,t_start:t_stop], axis=1)
-    U_spec = np.nanmean((U)[f_start:f_stop,t_start:t_stop], axis=1)
-
-    # Normalize
-    if normalize:
-        L_spec = np.sqrt(Q_spec**2 + U_spec**2)
-        Q_spec_norm = Q_spec / L_spec
-        U_spec_norm = U_spec / L_spec
-    else:
-        Q_spec_norm = Q_spec
-        U_spec_norm = U_spec
-
-    # Handle NaNs
-    if replace_nans:
-        Q_spec_norm = np.nan_to_num(Q_spec_norm, nan=0.0)
-        U_spec_norm = np.nan_to_num(U_spec_norm, nan=0.0)
-
-    return Q_spec_norm, U_spec_norm
-
-
-def rm_synthesis(P_spec, phi_array, b):
-    """
-    Perform RM synthesis on the given P spectrum.
-    
-    Parameters
-    ----------
-    P_spec : Normalized complex P spectrum (shape: [Nfreqs,]).
-    phi_array : Array of phi values to compute the FDF for (shape: [N_phi,]). In rad.
-    b : Pre-computed exponential term for the FDF calculation (shape: [N_phi, Nfreqs]).
-
-    Returns
-    -------
-    RM_meas : Phi value at which the peak of the FDF occurs (in rad/m^2).
-    FDF : F(phi) for the given P_spec (shape: [N_phi,]).
-    """
-
-    # Compute FDF
-    # K = 1.0 / np.nansum(W)  # normalization constant
-    # a = (-2.0 * 1j * phi_array).astype('complex64')
-    # b = np.outer(a, lambda_sq)  # shape (Nphi, Nlambda2)
-    FDF = K * np.sum(P_spec * b, 1)  # sum along lambda axis & normalize
-
-    # Find phi where peak FDF occurs (= RM)
-    FDF_peak_ind = np.argmax(np.abs(FDF))
-    RM_meas = phi_array[FDF_peak_ind]
-
-    return RM_meas, FDF
-
-
 def measure_start(name):
     """Start timing a block of code."""
 
@@ -293,16 +180,56 @@ if __name__ == "__main__":
     # Start total timing
     measure_start("total")
 
-    # Open & Process Data
+    # Open & Process Data (load, add sim bursts, mask RFI, normalize)
     # ------------------------------------------------------------------------------
     measure_start("load_mask_normalize")
 
     # Load data
     full_stokes_npz = np.load(DATA_FILE)
-
     full_stokes = full_stokes_npz['full_stokes']   # shape (Nstokes, Ntimes, Nfreqs)
     time = full_stokes_npz['time']
     freq = full_stokes_npz['freq']
+
+    # Inject bursts
+    if SIM_FLAG:
+        # Burst parameters
+        burst_params = gen_sim_burst_params(N_BURSTS, SIM_ARRIVAL_TIMES, SIM_BURST_WIDTHS, freq)
+        
+        # Pol fractions and angle
+        pol_frac_linear = [0.7, 0.4]  # can also have diff fractions for U and Q
+        pol_frac_circular = 0.
+        psi_0_rad = np.radians(30)  # Intrinsic polarization angle, [rad]
+
+        sigma_time = compute_timeseries_sigma(full_stokes)  # noise level in time series
+
+        # Build dict to save sim metadata
+        SIM_PARAMS = {
+            'num_bursts': N_BURSTS,
+            'arrival_times': SIM_ARRIVAL_TIMES,
+            'burst_widths': SIM_BURST_WIDTHS,
+            'snr': SIM_SNR,
+            'rm': SIM_RM,
+            'pol_frac_linear': pol_frac_linear,
+            'pol_frac_circular': pol_frac_circular,
+            'psi_0_rad': psi_0_rad, 
+            'sigma_time': sigma_time
+        }
+
+        # Generate Stokes
+        # component shape is (Nbursts, Nfreqs, Ntimes); sim shape is (Nfreqs, Ntimes)
+        I_components = gen_stokes_I(N_BURSTS, burst_params, freq, time, sigma_time)
+        I_sim, Q_components, U_components, V_sim = gen_stokes_QUV(I_components, 
+                                                                  N_BURSTS, 
+                                                                  pol_frac_linear, 
+                                                                  pol_frac_circular, 
+                                                                  psi_0_rad)
+        
+        # Add rotation measure & get full stokes array
+        Q_rot, U_rot = get_rot_stokes(I_components, Q_components, U_components, N_BURSTS, SIM_RM, freq)
+        full_stokes_sim = np.array([I_sim.T, Q_rot.T, U_rot.T, V_sim.T])  # shape (Nstokes, Ntimes, Nfreqs)
+
+        # Inject bursts in real data
+        full_stokes += full_stokes_sim
 
     # Get RFI mask using intensity data
     rfi_mask = get_rfi_mask(full_stokes[0], 
@@ -313,14 +240,6 @@ if __name__ == "__main__":
     # Normalize & mask RFI channels
     stokes_norm_masked = normalize_data(full_stokes.copy())
     stokes_norm_masked[:,:,rfi_mask] = np.nan
-
-    # Inject bursts from sim file, if provided
-    sim_params = None
-    if SIM_FILE is not None:
-        sim_data = np.load(SIM_FILE, allow_pickle=True)
-        stokes_sim = sim_data['full_stokes']  # shape (Nstokes, Ntimes, Nfreqs)
-        stokes_norm_masked += stokes_sim
-        sim_params = sim_data['params']
 
     measure_stop("load_mask_normalize")
 
@@ -344,8 +263,7 @@ if __name__ == "__main__":
     # phi array
     fwhm = 2 * np.sqrt(3) / Dl2  # FWHM of the RMSF
     if PHI_MAX is None:
-        PHI_MAX = np.sqrt(3)/dl2
-        # phi_max = np.sqrt(3)/dl2  # max RM to search
+        PHI_MAX = np.sqrt(3)/dl2  # max RM to search
         # phi_max = 10 * fwhm  # ~10*FWHM
     dphi = DPHI_SCALING * fwhm  # spacing between phi values, ~0.1*FWHM
     phi_array = np.arange(-PHI_MAX, PHI_MAX + dphi, dphi)  # shape (N_phi,)
@@ -488,11 +406,11 @@ if __name__ == "__main__":
         # Timings
         'timings': TIMINGS,
         # Injected bursts info
-        'sim_params': sim_params  # parameters of injected bursts from sim file, if provided
+        'sim_params': SIM_PARAMS  # parameters of injected bursts
     }
 
-    # Print metrics
-    print("\nRM Search Metrics:")
+    # Print metadata
+    print("\nRM Search Metadata:")
     for key, value in metadata.items():
         print(f"{key}: {value}")
 
