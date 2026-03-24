@@ -31,7 +31,7 @@ FREQ_BANDS="6"  # Specify which frequency bands to process (e.g., "4 5 6" or "6"
 NSAMPLES_PER_CHUNK=25000  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution **one at a time
 
 # Run baseband formatter
-cd /home/abernier/scratch/rm-search-Bernier-2025
+cd /home/abernier/scratch/rm-search-Bernier-2025/pipeline
 echo "baseband_formatter.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_DIR} ${FREQ_BANDS}\
       --start_file_ind ${START_FILE_IND} \
       --nfiles ${NFILES} \

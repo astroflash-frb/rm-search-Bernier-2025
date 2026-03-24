@@ -133,7 +133,7 @@ def get_spectra(Q, U, freq,  t_range=[0,None], f_range=[0,None], normalize=True,
     return Q_spec_norm, U_spec_norm
 
 
-def rm_synthesis(P_spec, phi_array, b):
+def rm_synthesis(P_spec, phi_array, b, K):
     """
     Perform RM synthesis on the given P spectrum.
     

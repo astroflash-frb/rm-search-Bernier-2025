@@ -36,9 +36,9 @@ RFI_STD_THRESHOLD=1.3
 SEARCH_TIME_STEP=${STEP_LIST[$INDEX]}  # Vary this parameter across array jobs
 
 # Simulation parameters
-SIM_FLAG=0  # Set to 1 to inject simulated bursts, 0 to run without
+SIM_FLAG=1  # Set to 1 to inject simulated bursts, 0 to run without
 N_BURSTS=2
-SIM_TIMES="25. 30."  # Need to be contained within the time range of the input data
+SIM_TIMES="10. 25."  # Need to be contained within the time range of the input data
 SIM_BURST_WIDTHS="0.04 0.01"  # Widths of simulated bursts in seconds (or same time unit as data)
 SIM_SNR="2 10"  # SNR of simulated bursts to inject (relative to noise in real timeseries data)
 SIM_RM="-120 500"  # RM of simulated bursts to inject (should be within phi_max)
@@ -51,14 +51,16 @@ SETTINGS=bands6_timeavg${TIME_RES}_300files_start160
 DATA_FILE=${DATA_DIR}/2022_CHIME_B2111+46/20220826T064420Z_${SETTINGS}.npz
 
 # Output paths
-OUTDIR=/scratch/abernier/pulsar_data/search_results/20220826T064420Z_SIM_${SETTINGS}/${PARAM_VARY} # Output directory
+OUTDIR=/scratch/abernier/pulsar_data/search_results/20220826T064420Z_$(
+    [[ $SIM_FLAG -eq 1 ]] && echo "SIM_" || echo ""
+)${SETTINGS}/${PARAM_VARY}  # output directory
 mkdir -p "$OUTDIR"  # Create output directory if it doesn't exist
 SAVE_FILE=${OUTDIR}/2022_CHIME_B2111+46_20220826T064420Z_${PARAM_VARY}${SEARCH_TIME_STEP}.npz  # Final save file
 # Note: SEARCH_TIME_STEP is the variable in the script+saved dict, but using 'timestep' in the filename for clarity
 
 
 # Run RM Search
-cd /home/abernier/scratch/rm-search-Bernier-2025
+cd /home/abernier/scratch/rm-search-Bernier-2025/pipeline
 echo "rm_search.py ${DATA_FILE} ${SAVE_FILE}\
       --phi_max ${PHI_MAX} \
       --dphi_scaling ${DPHI_SCALING} \

@@ -27,7 +27,7 @@ PARAM=timestep  # Specify which parameter was varied in the search results to pl
 RM_TRUE="-218.70 -120 500"
 
 # Run Ploting Script
-cd /home/abernier/scratch/rm-search-Bernier-2025
+cd /home/abernier/scratch/rm-search-Bernier-2025/pipeline
 echo "search_plots.py ${SETTINGS} ${PARAM} --rm_true ${RM_TRUE}"
 
 python search_plots.py ${SETTINGS} ${PARAM} --rm_true ${RM_TRUE}

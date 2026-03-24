@@ -2,8 +2,8 @@
 Perform an RM search on the given full Stokes data.
 """
 
-from rm_search_utils import *  # Import all functions from rm_utils.py
-from sim_burst_utils import *  # Import all functions from sim_burst_utils.py
+from rm_search_utils import *  # contains all functions related to masking RFI, normalizing, and computing spectra and FDF
+from sim_burst_utils import *  # contains all functions related to generating and injecting simulated bursts
 import argparse
 from time import perf_counter, process_time
 import os
@@ -124,7 +124,7 @@ SIM_RM = args.sim_rm
 SIM_PARAMS = None  # to be filled with sim params if SIM_FLAG=1
 
 # Other Constants & Globals
-RFI_RANGES = [(529,535), (483, 483), (452,452)]  # in MHz
+RFI_RANGES = [(529,535), (482,483),(450,450),(452,452),(457,458),(462,467),(470,470),(477,477)]  # in MHz
 SAMPLE_RATE = constants.FPGA_COUNTS_PER_SECOND * u.Hz
 TIMINGS = {}
 _process = psutil.Process(os.getpid())
@@ -271,13 +271,13 @@ if __name__ == "__main__":
 
     # Compute FSF (RMSF) w/ masked channels
     K = 1.0 / np.nansum(W)  # normalization constant
-    a = (-2.0 * 1j * phi_array).astype('complex64')  # exponent for RMSF
-    b = np.outer(a, lambda2_array)  # shape (Nphi, Nlambda2)
-    RMSF = K * np.sum(W * np.exp(b), 1)  # sum along lambda axis & normalize
+    a = (-2.0 * 1j * phi_array).astype('complex64')  # -2i phi
+    b = np.exp(np.outer(a, lambda2_array))  # e^{-2i phi lambda^2}, shape (Nphi, Nlambda2)
+    RMSF = K * np.sum(W * b, 1)  # sum along lambda axis & normalize
 
     # RMSF w/ all channels
     K_full = 1.0 / np.sum(W_full)  # normalization constant
-    RMSF_full = K_full * np.sum(W_full * np.exp(b), 1)  # sum along lambda axis & normalize
+    RMSF_full = K_full * np.sum(W_full * b, 1)  # sum along lambda axis & normalize
 
     measure_stop("rmsf_computation")
 
@@ -292,11 +292,6 @@ if __name__ == "__main__":
     # Set up arrays for results
     RM_meas_arr = np.zeros(len(time_slice_arr))  # Store peak of FDF for each time slice
     FDF_arr = np.zeros((len(time_slice_arr), N_phi), dtype=complex)  # FDF for each time slice
-
-    # Pre-compute the exponential for the FDF calculation
-    K = 1.0 / np.nansum(W)  # normalization constant
-    a = (-2.0 * 1j * phi_array).astype('complex64')
-    b = np.exp(np.outer(a, lambda2_array))  # shape (Nphi, Nlambda2)
 
     # Step through time & compute FDF
     for i,start_time in enumerate(time_slice_arr):
@@ -315,7 +310,7 @@ if __name__ == "__main__":
         # Compute FDF and RM for this time slice
         RM_meas_arr[i], FDF_arr[i] = rm_synthesis(P_spec_norm,
                                                   phi_array=phi_array,
-                                                  b=b
+                                                  b=b, K=K
                                                 )
     
     measure_stop("rm_search")
