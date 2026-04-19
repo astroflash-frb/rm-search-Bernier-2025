@@ -217,7 +217,7 @@ if __name__ == "__main__":
 
         # Generate Stokes
         # component shape is (Nbursts, Nfreqs, Ntimes); sim shape is (Nfreqs, Ntimes)
-        I_components = gen_stokes_I(N_BURSTS, burst_params, freq, time, sigma_time)
+        I_components = gen_stokes_I(N_BURSTS, burst_params, freq, time, sigma_time, SIM_SNR)
         I_sim, Q_components, U_components, V_sim = gen_stokes_QUV(I_components, 
                                                                   N_BURSTS, 
                                                                   pol_frac_linear, 
@@ -369,6 +369,12 @@ if __name__ == "__main__":
     dt_stokes = (nsamples_per_chunk/SAMPLE_RATE).to(u.ms)  # time resolution of the Stokes data, in ms
     df_stokes = (400/1024) * u.MHz  # frequency resolution, 1024 channels across 400 MHz bandwidth
 
+    # Get correct NFILES
+    nfiles = DATA_FILE.name.split("_")[3][:3]  # number of files read in (may have trailing f if <100)
+    if nfiles[-1] == 'f' : 
+        nfiles = nfiles[:-1]  # remove trailing 'f' if present
+    nfiles = int(nfiles)
+
     # Build metadata
     metadata = {
         # Data file info
@@ -377,11 +383,11 @@ if __name__ == "__main__":
         'freq_bands': [int(f) for f in DATA_FILE.name.split("_")[1][5:]],
         'fmin': freq[0],
         'fmax': freq[-1],
-        'df_stokes': df_stokes,  # frequency resolution of the Stokes data, in MHz
+        'df_stokes_MHz': df_stokes,  # frequency resolution of the Stokes data, in MHz
         'nsamples_per_chunk': nsamples_per_chunk,  # number of channels averaged together to get the Stokes data from the voltages
-        'dt_stokes': dt_stokes,  # time resolution of the Stokes data, in ms
-        'delta_t_total': time[-1] - time[0],  # total time duration of the data, in seconds
-        'nfiles': int(DATA_FILE.name.split("_")[3][:3]),  # number of files read in
+        'dt_stokes_ms': dt_stokes,  # time resolution of the Stokes data, in ms
+        'delta_t_total_s': time[-1] - time[0],  # total time duration of the data, in seconds
+        'nfiles': nfiles,  # number of files read in
         'start_file_ind': int(DATA_FILE.name.split("_")[4][5:-4]),  # index of first fild read (relative to raw baseband files)
         # RM search parameters
         'phi_max': PHI_MAX,
@@ -389,7 +395,7 @@ if __name__ == "__main__":
         'rfi_mean_threshold': RFI_MEAN_THRESHOLD,
         'rfi_std_threshold': RFI_STD_THRESHOLD,
         'search_time_step': SEARCH_TIME_STEP,  # number of time *channels* averaged over during RM search
-        'dt_rm': SEARCH_TIME_STEP * dt_stokes,  # effective time resolution of RM search results in ms
+        'dt_rm_ms': SEARCH_TIME_STEP * dt_stokes,  # effective time resolution of RM search results in ms
         # SLURM info
         'slurm_info': {
             "job_id": os.environ.get("SLURM_JOB_ID"),
@@ -398,8 +404,6 @@ if __name__ == "__main__":
             "ntasks": int(os.environ.get("SLURM_NTASKS", 1)),
             "cpus_per_task": int(os.environ.get("SLURM_CPUS_PER_TASK", 1)),
         },
-        # Timings
-        'timings': TIMINGS,
         # Injected bursts info
         'sim_params': SIM_PARAMS  # parameters of injected bursts
     }
@@ -413,3 +417,8 @@ if __name__ == "__main__":
     metadata_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_metadata.npz")
     np.savez(metadata_file, metadata=metadata)  # will need to unpack the metadata dict when opening
     print(f"Saved metadata to {metadata_file}")
+
+    # Save timing results
+    timing_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_timing.npz")
+    np.savez(timing_file, timings=TIMINGS)  # will need to unpack the timings dict when opening
+    print(f"Saved timing results to {timing_file}")

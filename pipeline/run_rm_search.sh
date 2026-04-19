@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=rm_search
 #SBATCH --account=def-istairs
-#SBATCH --time=3:00:00
+#SBATCH --time=00:30:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-9%5
+#SBATCH --array=0-3%4
 #
 #SBATCH --output=/scratch/abernier/logs/scripts/%j_%a.out
 #SBATCH --mail-user=audreanne.bernier@mail.mcgill.ca
@@ -23,9 +23,19 @@ source /home/abernier/envs/tril_env/bin/activate
 echo "Environment loaded"
 
 
+# Source info
+SOURCE=2022_CHIME_B2111+46
+OBS_NIGHT=20220826T064420Z
+
+# Input data path
+DATA_DIR=/scratch/abernier/pulsar_data/full_stokes
+TIME_RES=391  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
+STOKES_SETTINGS=bands45_timeavg${TIME_RES}_65files_start175
+DATA_FILE=${DATA_DIR}/${SOURCE}/${OBS_NIGHT}_${STOKES_SETTINGS}.npz
+
 # Set up parameter to vary
 INDEX=${SLURM_ARRAY_TASK_ID}
-STEP_LIST=(4 8 16 32 48 64 96 128 192 256)  # number of channels
+STEP_LIST=(1 4 8 16)  #(4 8 16 32 48 64 96 128 192 256)  # number of channels
 PARAM_VARY=timestep  # name of param for file/dict names ** doesn't have to match exactly the param variable name
 
 # RM search parameters
@@ -38,24 +48,17 @@ SEARCH_TIME_STEP=${STEP_LIST[$INDEX]}  # Vary this parameter across array jobs
 # Simulation parameters
 SIM_FLAG=1  # Set to 1 to inject simulated bursts, 0 to run without
 N_BURSTS=2
-SIM_TIMES="10. 25."  # Need to be contained within the time range of the input data
+SIM_TIMES="2. 6."  # Need to be contained within the time range of the input data
 SIM_BURST_WIDTHS="0.04 0.01"  # Widths of simulated bursts in seconds (or same time unit as data)
-SIM_SNR="2 10"  # SNR of simulated bursts to inject (relative to noise in real timeseries data)
+SIM_SNR="5 10"  # SNR of simulated bursts to inject (relative to noise in real timeseries data)
 SIM_RM="-120 500"  # RM of simulated bursts to inject (should be within phi_max)
 
-
-# Input data path
-TIME_RES=391  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
-DATA_DIR=/scratch/abernier/pulsar_data/full_stokes
-SETTINGS=bands6_timeavg${TIME_RES}_300files_start160
-DATA_FILE=${DATA_DIR}/2022_CHIME_B2111+46/20220826T064420Z_${SETTINGS}.npz
-
 # Output paths
-OUTDIR=/scratch/abernier/pulsar_data/search_results/20220826T064420Z_$(
-    [[ $SIM_FLAG -eq 1 ]] && echo "SIM_" || echo ""
-)${SETTINGS}/${PARAM_VARY}  # output directory
+OUTDIR=/scratch/abernier/pulsar_data/search_results/${SOURCE}/20220826T064420Z_$(
+    [[ $SIM_FLAG -eq 1 ]] && echo "SIM2_" || echo ""
+)${STOKES_SETTINGS}/${PARAM_VARY}  # output directory
 mkdir -p "$OUTDIR"  # Create output directory if it doesn't exist
-SAVE_FILE=${OUTDIR}/2022_CHIME_B2111+46_20220826T064420Z_${PARAM_VARY}${SEARCH_TIME_STEP}.npz  # Final save file
+SAVE_FILE=${OUTDIR}/${PARAM_VARY}${SEARCH_TIME_STEP}.npz  # Final save file
 # Note: SEARCH_TIME_STEP is the variable in the script+saved dict, but using 'timestep' in the filename for clarity
 
 

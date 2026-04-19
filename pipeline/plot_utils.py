@@ -32,7 +32,7 @@ plt.rcParams.update({
 
 
 # --- 4-panels plot function ---
-def plot_stokes(data_array, freq, time, t_unit='ms', suptitle='', 
+def plot_stokes(data_array, freq, time, t_unit='s', suptitle='', 
                 rfi_masked=None, height_ratios=[1, 3], cbar_lim_max=None, 
                 save_name=None, save_loc=None):
     """
@@ -94,7 +94,7 @@ def plot_stokes(data_array, freq, time, t_unit='ms', suptitle='',
                        origin='lower', 
                        aspect='auto', 
                        extent=extent, 
-                       cmap='RdBu',
+                       cmap='RdBu',  # RdBu
                        norm=linear,
                        )
         
@@ -116,12 +116,11 @@ def plot_stokes(data_array, freq, time, t_unit='ms', suptitle='',
         if i % 2 == 0:
             stokes_ax.set_ylabel('Frequency [MHz]')
 
-    
     plt.subplots_adjust(top=0.93) 
 
     # --- Save Figure --
     if save_name is not None and save_loc is not None:
-        plt.savefig(save_loc + save_name)
+        plt.savefig(save_loc + save_name + ".pdf", dpi=300)
     plt.close()
     
 
@@ -142,8 +141,27 @@ def plot_rmsf(phi_array, RMSF, RMSF_full, save_loc=None, save_name='RMSF'):
     plt.close()
 
 
-def plot_2panels(data, time, phi, cbar_label='', time_true=None, height_ratios=[1, 3],
-                 ax1_type='peak', ax2_ylabel=r'$\phi$ [rad/m$^2$]', t_unit='ms',
+def downsample_time_mean(data, factor):
+    """
+    Downsample data along the time axis by some factor (number of time bins per group)
+    """
+    # Trim time axis so it's divisible by 'factor'
+    Ntime = data.shape[0]
+    Ntime_trimmed = (Ntime // factor) * factor
+    trimmed_data = data[:Ntime_trimmed]
+
+    # Group consecutive time samples into bins of size 'factor'
+    # New shape: (Ngroups, factor, Nphi)
+    grouped_data = trimmed_data.reshape(-1, factor, data.shape[1])
+
+    # Average within each group (collapse the 'factor' axis)
+    downsampled_data = grouped_data.mean(axis=1)
+    
+    return downsampled_data
+    
+
+def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='', plot_true=False,
+                 ax1_type='peak', ax2_ylabel=r'$\phi$ [rad/m$^2$]', t_unit='s',
                  xlim=None, ylim=None, suptitle=None, save_name=None, save_loc=None):
     """
     Make a 2-panel phi/time plot of some data.
@@ -154,38 +172,39 @@ def plot_2panels(data, time, phi, cbar_label='', time_true=None, height_ratios=[
     time : Time array (shape: [Ntimes]).
     phi : Phi array (shape: [Nphi]).
     cbar_label : Colorbar label.
-    time_true : list
-        list of true times where bursts occur.
     plot_true : If True, plot the true burst times as vertical dashed lines.
-    height_ratios : Ratios of the heights of the two panels.
     ax1_type : Type of the first panel ('peak' for peak amplitude, 'mean' for mean amplitude).
     t_unit : Unit for the time axis (e.g., 'ms', 's').
     """
-    
-    fig, (ax1, ax2) = plt.subplots(
-        2, 1, 
-        gridspec_kw={'height_ratios':height_ratios, 'right':0.85, 'hspace':0}, 
-        sharex=True,
-        figsize=(8, 8),
-        dpi=150
-    )
+
+    # Define figure with 2 rows, 3 columns
+    fig = plt.figure(figsize=(8, 8), dpi=150)
+    gs = gridspec.GridSpec(2, 3, 
+                           height_ratios=[1, 3],
+                           width_ratios=[4, 1.2, 0.2],  # main, slice panel, colorbar
+                           hspace=0,
+                           wspace=0.05)
+
+    ax1 = fig.add_subplot(gs[0, 0])              # timeseries panel
+    ax2 = fig.add_subplot(gs[1, 0], sharex=ax1)  # main imshow
+    ax3 = fig.add_subplot(gs[1, 1], sharey=ax2)  # slice panel
+    cax = fig.add_subplot(gs[1, 2])              # colorbar axis
+    if suptitle is not None:
+        ax1.set_title(suptitle)
 
     # AX1: True bursts
-    if time_true is not None:
-        label = 'True bursts'
-        for t in time_true:
-            ax1.axvline(t, color='grey', linestyle='--', label=label)
-            label = ''
-        ax1.legend(loc='upper left')
+    # if plot_true:
+    #     ax1.axvline(TIME_TRUE[0], color='grey', linestyle='--', label='True bursts')
+    #     ax1.axvline(TIME_TRUE[1], color='grey', linestyle='--')
+    #     ax1.legend(loc='upper left')
 
-    # AX1: Get peak or avg for each time slice
+    # AX1: Get peak (or avg) for each time slice
     peak = np.max(np.abs(data), axis=1) if ax1_type=='peak' else np.mean(np.abs(data), axis=1)
     ax1.plot(time, peak, lw=0.8, c='rebeccapurple')
     ax1_label = 'Peak Amp.' if ax1_type == 'peak' else 'Avg. Amp.'
     ax1.set_ylabel(ax1_label)
 
-
-    # AX2: Plot data
+    # AX2: Plot data (imshow)
     extent = (time[0], time[-1], phi[0], phi[-1])
     im = ax2.imshow(np.abs(data).T,  # shape (Ntimes, Nphi).T
                     aspect='auto',
@@ -199,17 +218,18 @@ def plot_2panels(data, time, phi, cbar_label='', time_true=None, height_ratios=[
         ax2.set_xlim(xlim)
     if ylim is not None:
         ax2.set_ylim(ylim)
-    
+
+    # AX3: downsampled slices (along time axis)
+    downsampled_data = downsample_time_mean(data, factor=downsamp_factor)
+    for d in downsampled_data:
+        ax3.plot(abs(d), phi, color='k', alpha=0.1, lw=0.7)
+    # ax3.set_xlabel('avg')
+    ax3.set_title(f'Time-avg (×{downsamp_factor})')
+    ax3.tick_params(labelleft=False)
+
 	# Colorbar
-    cbar = fig.colorbar(im, ax=(ax1, ax2), pad=0.02, 
-                        shrink=height_ratios[1]/np.sum(height_ratios), 
-                        anchor=(0.0, 0.0)
-                        )
+    cbar = fig.colorbar(im, cax=cax)
     cbar.set_label(cbar_label)
-    
-    if suptitle is not None:
-        ax1.set_title(suptitle)
-    # plt.tight_layout()
     
     # --- Save Figure --
     if save_name is not None and save_loc is not None:
@@ -223,15 +243,16 @@ def plot_cross_corr_slices(phi_lags, cross_corr_arr, known_bursts_inds=None, tru
     plt.figure(figsize=(9, 6))
     plt.title('Cross-Correlation of FDF with RMSF')
 
-    # plot all slices
-    for i,t_slice in enumerate(cross_corr_arr):
+   # Downsample & plot data
+    downsampled_cross_corr = downsample_time_mean(cross_corr_arr, factor=8)
+    for i,t_slice in enumerate(downsampled_cross_corr):
         # color = 'dodgerblue' if i in [ind1-1, ind1, ind1+1] else ('orange' if i in [ind2-1, ind2, ind2+1] else 'black')
         # color above is to have all lines ~ time of bursts not be black
         color = 'k'
-        plt.plot(phi_lags, abs(t_slice), color=color, alpha=0.1, lw=0.7)
+        plt.plot(phi_lags, abs(t_slice), color=color, alpha=0.2, lw=0.7)
 
     # empty plot for noise label
-    plt.plot([], [], color='black', alpha=1, lw=1, label='Noise slices')
+    # plt.plot([], [], color='black', alpha=1, lw=1, label='Noise slices')
 
     # (Re) Plot known burst slices (to have them in color)
     # plt.plot(phi_lags, abs(cross_corr_arr[ind1]), color='dodgerblue', label=f'Burst 1 ({time_slice_arr[ind1]:.1f} {t_unit})')
@@ -244,18 +265,20 @@ def plot_cross_corr_slices(phi_lags, cross_corr_arr, known_bursts_inds=None, tru
     rm_colors = [cmap(i / num_colors) for i in range(num_colors)]
     
     for i,RM in enumerate(true_RM):
-        plt.axvline(x=RM, label=f'True RM = {RM}', color=rm_colors[i], linestyle='--', alpha=0.6)
+        plt.axvline(x=RM, label=rf'True $\phi_{i+1}$ = {RM}', color=rm_colors[i], linestyle='--', alpha=0.6)
 
     # Labels
     plt.xlabel(r'$\phi$ [rad/m$^2$]')
     plt.ylabel('Amplitude')
     plt.xlim(-700, 700)
     plt.legend(loc='upper left', bbox_to_anchor=(1.02, 1))
+    plt.ylim(4, 10.5)
 
     if save_name is not None:
         plt.savefig(save_loc + save_name, dpi=300)
     plt.close()
     
+
 
 def scale_lightness(rgb, scale_l):
     # convert rgb to hls
@@ -277,8 +300,8 @@ def get_colors(num_colors):
     return colors_light, colors_dark
 
 
-def plot_time_curves_by_block(param_arr, dict_list, x_label, fig_title=None, 
-                              save_name=None, save_loc=None,
+def plot_time_curves_by_block(param_arr, metadata_dict_list, timings_dict_list,
+                              x_label, fig_title=None, save_name=None, save_loc=None,
                               plot_total=True, plot_wall=True, plot_ylog=True, convert_tstep=False):
     """
     Plot timing curves as a function of a tunable parameter for each code block.
@@ -305,19 +328,17 @@ def plot_time_curves_by_block(param_arr, dict_list, x_label, fig_title=None,
     """
 
     # -- Info for plotting --
-    # Get dicts
-    data_info = dict_list[0]  # using first dict (they all use the same data)
-    timing_dicts = [d['timings'] for d in dict_list]  # list of dicts of dicts
+    data_info = metadata_dict_list[0]  # using first dict (they all use the same metadata except the varied param)
     
     # Convert search time step to time units
     if convert_tstep :
-        param_arr = [(d['dt_rm']).to(u.ms).value for d in dict_list]
+        param_arr = [(d['dt_rm']).to(u.ms).value for d in metadata_dict_list]
         x_label = "Search Time Step [ms]"
     
     # Get code block labels and keys for timing dicts
     block_labels = ['Total', 'Mask RFI & Normalize', 'RMSF', 'RM Search', 'Cross-Correlation']
     block_labels = block_labels[1:] if not plot_total else block_labels  # remove 'Total'
-    block_keys = list(timing_dicts[0].keys())[1:] if not plot_total else timing_dicts[0].keys()
+    block_keys = list(timings_dict_list[0].keys())[1:] if not plot_total else timings_dict_list[0].keys()
 
     # Get colors
     num_colors = len(block_keys)
@@ -329,11 +350,11 @@ def plot_time_curves_by_block(param_arr, dict_list, x_label, fig_title=None,
 
     # Get and plot data: wall and CPU times
     for i,code_block in enumerate(block_keys):
-        cpu_data = [t_dict[code_block]['cpu_elapsed'] for t_dict in timing_dicts]
+        cpu_data = [t_dict[code_block]['cpu_elapsed'] for t_dict in timings_dict_list]
         ax.plot(param_arr, cpu_data, c=colors_light[i], label=block_labels[i])
         
         if plot_wall:
-            wall_data = [t_dict[code_block]['wall_elapsed'] for t_dict in timing_dicts]
+            wall_data = [t_dict[code_block]['wall_elapsed'] for t_dict in timings_dict_list]
             ax.plot(param_arr, wall_data,  c=colors_dark[i], ls=':')
 
     # Axes 
@@ -350,8 +371,8 @@ def plot_time_curves_by_block(param_arr, dict_list, x_label, fig_title=None,
     ]  
     # Line style labels (time type)
     style_handles = [
-        Line2D([0], [0], color='black', lw=2, label='CPU Time'),
-        Line2D([0], [0], color='black', lw=2, linestyle=':', label='Wall Time')
+        # Line2D([0], [0], color='black', lw=2, label='CPU Time'),
+        # Line2D([0], [0], color='black', lw=2, linestyle=':', label='Wall Time')
     ]  
     # Combine handles
     all_handles = (block_handles + style_handles)
@@ -379,9 +400,9 @@ def plot_time_curves_by_block(param_arr, dict_list, x_label, fig_title=None,
     plt.close()
 
 
-def plot_efficiency_by_block(param_arr, dict_list, x_label, fig_title=None, 
-                         save_name=None, save_loc=None, 
-                         plot_total=True, plot_ylog=True, convert_tstep=False):
+def plot_efficiency_by_block(param_arr, metadata_dict_list, timings_dict_list, 
+                             x_label, fig_title=None, save_name=None, save_loc=None, 
+                             plot_total=True, plot_ylog=True, convert_tstep=False):
     """
     Plot CPU efficiency curves as a function of a tunable parameter for each code block.
     
@@ -407,19 +428,17 @@ def plot_efficiency_by_block(param_arr, dict_list, x_label, fig_title=None,
     """
 
     # -- Info for plotting --
-    # Get dicts
-    data_info = dict_list[0]  # using first dict (they all use the same data)
-    timing_dicts = [d['timings'] for d in dict_list]  # list of dicts of dicts
+    data_info = metadata_dict_list[0]  # using first dict (they all use the same data)
     
     # Convert search time step to time
     if convert_tstep :
-        param_arr = [(d['dt_rm']).to(u.ms).value for d in dict_list]
+        param_arr = [(d['dt_rm']).to(u.ms).value for d in metadata_dict_list]
         x_label = "Search Time Step [ms]"
         
     # Get code block labels and keys for timing dicts
     block_labels = ['Total', 'Mask RFI & Normalize', 'RMSF', 'RM Search', 'Cross-Correlation']
     block_labels = block_labels[1:] if not plot_total else block_labels  # remove 'Total'
-    block_keys = list(timing_dicts[0].keys())[1:] if not plot_total else timing_dicts[0].keys()
+    block_keys = list(timings_dict_list[0].keys())[1:] if not plot_total else timings_dict_list[0].keys()
 
     # Get colors
     num_colors = len(block_keys)
@@ -431,7 +450,7 @@ def plot_efficiency_by_block(param_arr, dict_list, x_label, fig_title=None,
 
     # Get and plot data
     for i,code_block in enumerate(block_keys):
-        data = [t_dict[code_block]['cpu_efficiency'] for t_dict in timing_dicts]
+        data = [t_dict[code_block]['cpu_efficiency'] for t_dict in timings_dict_list]
         ax.plot(param_arr, data, c=colors_light[i], label=block_labels[i])
 
     # Axes

@@ -36,9 +36,10 @@ PARAM = args.param
 DIR = f"/home/abernier/scratch/pulsar_data/search_results/{SETTINGS}/{PARAM}/"
 
 # Search result files
-METADATA_FILES = glob.glob(os.path.join(DIR, f"2022_CHIME_B2111+46_20220826T064420Z_{PARAM}*_metadata.npz"))
-DATA_FILES = glob.glob(os.path.join(DIR, f"2022_CHIME_B2111+46_20220826T064420Z_{PARAM}*_arrays.npz"))
-NFILES = len(DATA_FILES)
+METADATA_FILES = glob.glob(os.path.join(DIR, f"{PARAM}*_metadata.npz"))
+TIMING_FILES = glob.glob(os.path.join(DIR, f"{PARAM}*_timing.npz"))
+DATA_FILES = glob.glob(os.path.join(DIR, f"{PARAM}*_arrays.npz"))
+NFILES = len(DATA_FILES)  # number of files to plot
 DATA_FILES_UNIQUE = True   # determines if masked+normalized stokes data is the same for all values of the varied params or not
                            # True if data is unique, false if data changes with each run of param
 RM_TRUE = args.rm_true
@@ -46,6 +47,10 @@ RM_TRUE = args.rm_true
 # Save directory for figures
 SAVE_FIG_DIR = f'/scratch/abernier/rm-search-Bernier-2025/figures/{SETTINGS}/{PARAM}/'
 os.makedirs(os.path.dirname(SAVE_FIG_DIR), exist_ok=True)
+
+print(f"Found {NFILES} files to plot for parameter {PARAM}:")
+for f in DATA_FILES:
+    print(f)
 
 
 
@@ -120,15 +125,14 @@ def get_data(files, param):
     }
 
 
-def load_metrics(file, param):
+def load_metrics(file, param, metric_type='timings'):
     param_value = int(file.split(f"{param}")[2].split("_")[0])  # Extract param value from filename
-    metadata_dict = np.load(file, allow_pickle=True)['metadata'].item()
-    
-    return param_value, metadata_dict
+    metric_dict = np.load(file, allow_pickle=True)[metric_type].item()
+    return param_value, metric_dict
 
-def get_metric_dict_list(files, param):
+def get_metric_dict_list(files, param, metric_type='timings'):
     # open files and get results
-    results = [load_metrics(f, param) for f in files]
+    results = [load_metrics(f, param, metric_type) for f in files]
     param_list, dict_list = zip(*results)
     
     # sort
@@ -168,16 +172,20 @@ if __name__ == "__main__":
     phi_lags = data['phi_lags']  # shape (Nlags,)
 
     # Get Metadata and time data
-    _, dict_list = get_metric_dict_list(METADATA_FILES, PARAM)
-    # Hierarchy of dict_list:
-    # - every element in the list is a dict for different run ie param value
-    # - within those dicts, there are different dicts for each block of code. 
+    _, metadata_dict_list = get_metric_dict_list(METADATA_FILES, PARAM, metric_type='metadata')
+    _, timings_dict_list = get_metric_dict_list(TIMING_FILES, PARAM, metric_type='timings')
+    # Hierarchy of metadata_dict_list:
+    # - every element in the list is a dict for different run ie param value ie file
+    # Hierarchy of timings_dict_list:
+    # - every element in the list is a dict for different run ie param value ie file
+    # - within each of those timings dicts, there are different dicts for each block of code. 
     #    These have time information 'total', 'load_mask_normalize', 'rmsf_computation', 'rm_search', 'cross_correlation'
 
     # Printing info
-    print(dict_list[0].keys())
-    print(dict_list[0]['timings'].keys())
-    print(dict_list[0]['timings']['total'])
+    print(metadata_dict_list[0].keys())
+    print(timings_dict_list[0].keys())
+    print(timings_dict_list[0]['total'])
+
 
 
     # Plots
@@ -229,11 +237,11 @@ if __name__ == "__main__":
     # Time Curves
     # ------------------------------------------------------------------------------
     # wall & cpu times vs param, grouped by block
-    plot_time_curves_by_block(param_list, dict_list, 'Downsampling Factor', 
+    plot_time_curves_by_block(param_list, metadata_dict_list, timings_dict_list, 'Downsampling Factor', 
                               fig_title=None, save_name='timecurves', save_loc=SAVE_FIG_DIR,
-                              plot_total=True, plot_wall=True, plot_ylog=True, convert_tstep=True)
+                              plot_total=True, plot_wall=False, plot_ylog=True, convert_tstep=False)
     
     # cpu efficiency vs param, grouped by code block 
-    plot_efficiency_by_block(param_list, dict_list, 'Downsampling Factor', 
+    plot_efficiency_by_block(param_list, metadata_dict_list, timings_dict_list, 'Downsampling Factor', 
                              fig_title=None, save_name='efficiency', save_loc=SAVE_FIG_DIR,
-                             plot_total=True, plot_ylog=False, convert_tstep=True)
+                             plot_total=True, plot_ylog=False, convert_tstep=False)

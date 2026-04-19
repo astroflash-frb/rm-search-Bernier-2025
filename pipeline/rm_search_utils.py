@@ -142,6 +142,7 @@ def rm_synthesis(P_spec, phi_array, b, K):
     P_spec : Normalized complex P spectrum (shape: [Nfreqs,]).
     phi_array : Array of phi values to compute the FDF for (shape: [N_phi,]). In rad.
     b : Pre-computed exponential term for the FDF calculation (shape: [N_phi, Nfreqs]).
+    K : Normalization constant for the FDF calculation.
 
     Returns
     -------

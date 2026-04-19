@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=baseband_formatter
 #SBATCH --account=def-istairs
-#SBATCH --time=3:00:00
+#SBATCH --time=00:30:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --output=/scratch/abernier/logs/scripts/%A.out
@@ -25,19 +25,22 @@ OBS_NIGHT=20220826T064420Z_CHIME_vdif
 SAVE_DIR=/scratch/abernier/pulsar_data/full_stokes
 
 # Parameters
-START_FILE_IND=160
-NFILES=300
-FREQ_BANDS="6"  # Specify which frequency bands to process (e.g., "4 5 6" or "6")
-NSAMPLES_PER_CHUNK=25000  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution **one at a time
+START_FILE_IND=175
+NFILES=65
+FREQ_BANDS="4 5"  # Specify which frequency bands to process (e.g., "4 5 6" or "6")
+NSAMPLES_PER_CHUNK=391  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution **one at a time
+DM=141.26
 
 # Run baseband formatter
 cd /home/abernier/scratch/rm-search-Bernier-2025/pipeline
 echo "baseband_formatter.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_DIR} ${FREQ_BANDS}\
       --start_file_ind ${START_FILE_IND} \
       --nfiles ${NFILES} \
-      --num_time_samples ${NSAMPLES_PER_CHUNK}"
+      --num_time_samples ${NSAMPLES_PER_CHUNK} \
+      --dispersion_measure ${DM}"
 
 python baseband_formatter.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_DIR} ${FREQ_BANDS}\
       --start_file_ind ${START_FILE_IND} \
       --nfiles ${NFILES} \
-      --num_time_samples ${NSAMPLES_PER_CHUNK}
+      --num_time_samples ${NSAMPLES_PER_CHUNK} \
+      --dispersion_measure ${DM}
