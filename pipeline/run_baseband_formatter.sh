@@ -25,9 +25,9 @@ OBS_NIGHT=20220826T064420Z_CHIME_vdif
 SAVE_DIR=/scratch/abernier/pulsar_data/full_stokes
 
 # Parameters
-START_FILE_IND=175
+START_FILE_IND=160
 NFILES=65
-FREQ_BANDS="4 5"  # Specify which frequency bands to process (e.g., "4 5 6" or "6")
+FREQ_BANDS="5 6 7"  # Specify which frequency bands to process (e.g., "4 5 6" or "6")
 NSAMPLES_PER_CHUNK=391  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution **one at a time
 DM=141.26
 

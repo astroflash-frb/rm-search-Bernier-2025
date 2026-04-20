@@ -94,7 +94,7 @@ def plot_stokes(data_array, freq, time, t_unit='s', suptitle='',
                        origin='lower', 
                        aspect='auto', 
                        extent=extent, 
-                       cmap='RdBu',  # RdBu
+                       cmap='viridis',  # RdBu
                        norm=linear,
                        )
         
@@ -272,7 +272,7 @@ def plot_cross_corr_slices(phi_lags, cross_corr_arr, known_bursts_inds=None, tru
     plt.ylabel('Amplitude')
     plt.xlim(-700, 700)
     plt.legend(loc='upper left', bbox_to_anchor=(1.02, 1))
-    plt.ylim(4, 10.5)
+    plt.ylim(5, 11)
 
     if save_name is not None:
         plt.savefig(save_loc + save_name, dpi=300)
@@ -332,7 +332,7 @@ def plot_time_curves_by_block(param_arr, metadata_dict_list, timings_dict_list,
     
     # Convert search time step to time units
     if convert_tstep :
-        param_arr = [(d['dt_rm']).to(u.ms).value for d in metadata_dict_list]
+        param_arr = [(d['dt_rm_ms']).to(u.ms).value for d in metadata_dict_list]
         x_label = "Search Time Step [ms]"
     
     # Get code block labels and keys for timing dicts
@@ -386,7 +386,7 @@ def plot_time_curves_by_block(param_arr, metadata_dict_list, timings_dict_list,
     fig.legend(
         handles=all_handles,
         title=f"{data_info['fmin']:.1f} - {data_info['fmax']:.1f} MHz, " + 
-                f"{data_info['delta_t_total']:.1f} s",
+                f"{data_info['delta_t_total_s']:.1f} s",
         loc='upper left',
         bbox_to_anchor=(legend_x, legend_y),
         frameon=True,
@@ -467,7 +467,7 @@ def plot_efficiency_by_block(param_arr, metadata_dict_list, timings_dict_list,
     
     fig.legend(
         title=f"{data_info['fmin']:.1f} - {data_info['fmax']:.1f} MHz, " + 
-                f"{data_info['delta_t_total']:.1f} s",
+                f"{data_info['delta_t_total_s']:.1f} s",
         loc='upper left',
         bbox_to_anchor=(legend_x, legend_y),
         frameon=True,
@@ -477,5 +477,132 @@ def plot_efficiency_by_block(param_arr, metadata_dict_list, timings_dict_list,
 
     # -- Save figure --
     if save_name is not None and save_loc is not None:
+        plt.savefig(save_loc + save_name, dpi=300)
+    plt.close()
+
+
+
+def get_max_snr(data, phi_arr, time, t_true, rm_true):
+    """
+    Compute SNR of peaks in the FDF (or cross-correlation) where the bursts occur.
+    SNR at each time is calculated using (peak_signal - baseline) / sigma_noise, where
+    peak_signal is the FDF value at the true rm, baseline is the median of the time slice with
+    the full peak masked, and sigma noise is the noise std for the given time bin.
+    The function returns the peak SNR in time for each burst.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        data of shape (Ntime, Nphi)
+    phi_arr : 
+        must match the phi axis of data
+    time : 
+        must match time axis of data
+    t_true : list of floats
+        list of times at which bursts occur
+    rm_true : list of floats
+        list of true RMs of bursts. Ordering must match t_true
+    """
+
+    snr_max_per_peak = []
+    
+    for i,rm in enumerate(rm_true):
+        rm_ind = np.argmin(np.abs(phi_arr - rm))  # index of true RM along phi array
+        mask_start, mask_stop = np.argmin(abs(phi_arr-(rm-125))), np.argmin(abs(phi_arr-(rm+125)))  # phi edges to mask burst
+        t1,t2 = np.argmin(abs(time-(t_true[i]-0.3))), np.argmin(abs(time-(t_true[i]+0.3)))  # time range to compute SNR for this burst
+    
+        print(f"Processing burst with RM = {rm}")
+        print(f"Masking burst along phi between {phi_arr[mask_start]:.3f} and {phi_arr[mask_stop]:.3f}")
+        print(f"Limiting SNR computations between {time[t1]:.3f} and {time[t2]:.3f} s")
+    
+        snr_t = []
+    
+        for t_idx in range(t1,t2):
+            fdf = np.abs(data[t_idx, :])  # abs of FDF for this time bin
+            peak_signal = fdf[rm_ind]  # signal at true rm
+    
+            # mask out region around the signal in phi
+            mask = np.ones_like(fdf, dtype=bool)
+            mask[max(0, mask_start):mask_stop] = False
+            noise = fdf[mask]
+    
+            baseline = np.nanmedian(noise)  # absolute level
+            sigma_noise = np.std(noise)  # std of noise
+    
+            # compute snr
+            snr = (peak_signal - baseline) / sigma_noise
+            snr_t.append(snr)
+    
+        # take max snr over time for this burst
+        max_snr = np.max(snr_t)
+        snr_max_per_peak.append(max_snr)
+        print(f"Max SNR found: {max_snr:.3f}\n")
+
+    return snr_max_per_peak
+
+
+
+def plot_cpu_and_snr(param_arr, snr_arr, metadata_dict_list, timings_dict_list,
+                     save_name="cpu_and_snr", save_loc=None, 
+                     plot_ylog=True, t_true=[], rm_true=[]):
+    
+    # --- Info ---
+    data_info = metadata_dict_list[0]
+    t_true = data_info["sim_params"]['arrival_times']
+    rm_true = data_info["sim_params"]['rm']
+
+    # --- Colors ---
+    rm_colors = ["#592e83", "#9984d4"]
+    cpu_color = "#6a994e"
+    
+    # --- Figure Setup ---
+    fig, ax1 = plt.subplots(figsize=(8,5))
+    fig.suptitle(
+        f"{data_info['fmin']:.1f} - {data_info['fmax']:.1f} MHz, "
+        f"{data_info['delta_t_total_s']:.1f} s", y=0.95
+    )
+    
+    # --- Left Axis: CPU Time ---
+    cpu_data = [t_dict['total']['cpu_elapsed'] for t_dict in timings_dict_list]
+    ax1.plot(param_arr, cpu_data, color=cpu_color, label="CPU time")
+    ax1.set_xlabel("Downsampling Factor")
+    ax1.set_ylabel("CPU Time [s]", color=cpu_color)
+    ax1.tick_params(axis='y', labelcolor=cpu_color)
+    
+    if plot_ylog:
+        ax1.set_yscale("log")
+    
+    # --- Right Axis: SNR ---
+    ax2 = ax1.twinx()
+    for i in range(len(t_true)):
+        ax2.plot(
+            param_arr,
+            snr_arr[:, i],
+            color=rm_colors[i],
+            label=rf"$\phi$={rm_true[i]}, t={t_true[i]} s"
+        )
+    
+    ax2.set_ylabel("S/R", color=rm_colors[0])
+    ax2.tick_params(axis='y', labelcolor=rm_colors[0])
+    
+    
+    # --- Legend ---
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    
+    ax1.legend(
+        lines1 + lines2,
+        labels1 + labels2,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=3,
+        frameon=False
+    )
+    
+    plt.subplots_adjust(bottom=0.25)
+    plt.tight_layout()
+    
+    # --- Save Fig ---
+    if save_name is not None:
         plt.savefig(save_loc + save_name, dpi=300)
     plt.close()

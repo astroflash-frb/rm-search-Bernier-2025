@@ -163,3 +163,15 @@ def rm_synthesis(P_spec, phi_array, b, K):
     return RM_meas, FDF
 
 
+def slice_around_burst(full_stokes, time, slice_width=0.1):
+
+    # Find highest burst in timeseries 
+    max_burst_t = time[np.argmax(np.nanmean(full_stokes[0], axis=1))]  # time of peak I
+    tstart, tstop = max_burst_t - slice_width, max_burst_t + slice_width  # slice width in seconds
+    tstart_ind, tstop_ind = np.argmin(abs(time-tstart)), np.argmin(abs(time-tstop))  # convert to indices
+
+    # Slice data around burst
+    new_stokes = full_stokes.copy()[:,tstart_ind:tstop_ind]  # slice data around burst
+    time_burst = time.copy()[tstart_ind:tstop_ind]  # new time axis
+
+    return new_stokes, time_burst

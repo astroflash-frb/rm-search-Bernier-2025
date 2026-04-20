@@ -61,6 +61,12 @@ parser.add_argument(
     help='Number of time channels to average over during RM search (default: 10).'
 )
 parser.add_argument(
+    "--slice_burst_flag",
+    type=int,
+    default=0,
+    help='Set to 1 to slice the data around the highest SNR burst, 0 to use the full data saved by baseband formatter (default: 0).'
+)
+parser.add_argument(
     "--sim_flag",
     type=int,
     default=0,
@@ -106,6 +112,7 @@ args = parser.parse_args()
 # Files
 DATA_FILE = args.data_file
 SAVE_FILE = args.save_file
+SLICE_BURST_FLAG = args.slice_burst_flag
 
 # Search parameters
 PHI_MAX = args.phi_max
@@ -240,6 +247,10 @@ if __name__ == "__main__":
     # Normalize & mask RFI channels
     stokes_norm_masked = normalize_data(full_stokes.copy())
     stokes_norm_masked[:,:,rfi_mask] = np.nan
+
+    # If slice_burst_flag is set, slice the data around the highest SNR burst
+    if SLICE_BURST_FLAG:
+        stokes_norm_masked, time = slice_around_burst(stokes_norm_masked, time)
 
     measure_stop("load_mask_normalize")
 

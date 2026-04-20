@@ -6,13 +6,14 @@ import numpy as np
 from fitburst.analysis.model import SpectrumModeler
 from astropy.constants import c
 
+
 def compute_timeseries_sigma(full_stokes):
     """
     Compute statistics for raw freq-averaged timeseries, returning the standard deviation.
     """
-    I_real = full_stokes[0]  # (Ntimes, Nfreqs)
-    I_real_avg = np.nanmean(I_real, axis=1)  # avg over freqs, (Ntimes,)
-    sigma_time = np.nanstd(I_real_avg)  # noise level in time series
+    I = full_stokes[0]  # (Ntimes, Nfreqs)
+    I_avg = np.nanmean(I, axis=1)  # avg over freqs, (Ntimes,)
+    sigma_time = np.nanstd(I_avg)  # noise level in time series
 
     return sigma_time
 

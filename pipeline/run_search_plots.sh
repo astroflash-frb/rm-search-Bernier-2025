@@ -22,7 +22,7 @@ echo "Environment loaded"
 
 # Parameters
 TIME_RES=391  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
-SETTINGS=2022_CHIME_B2111+46/20220826T064420Z_SIM2_bands45_timeavg${TIME_RES}_65files_start175  # Specify which Stokes data was used in the search
+SETTINGS=2022_CHIME_B2111+46/20220826T064420Z_SIM5.10_bands45_timeavg${TIME_RES}_65files_start175  # Specify which Stokes data was used in the search
 PARAM=timestep  # Specify which parameter was varied in the search results to plot
 RM_TRUE="-120 500"  # true burst -218.70
 

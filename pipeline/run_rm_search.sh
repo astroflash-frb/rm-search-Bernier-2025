@@ -29,13 +29,14 @@ OBS_NIGHT=20220826T064420Z
 
 # Input data path
 DATA_DIR=/scratch/abernier/pulsar_data/full_stokes
+SLICE_BURST_FLAG=0  # set to 1 to slice the data around the highest SNR burst, 0 to use the full data saved by baseband formatter
 TIME_RES=391  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
 STOKES_SETTINGS=bands45_timeavg${TIME_RES}_65files_start175
 DATA_FILE=${DATA_DIR}/${SOURCE}/${OBS_NIGHT}_${STOKES_SETTINGS}.npz
 
 # Set up parameter to vary
 INDEX=${SLURM_ARRAY_TASK_ID}
-STEP_LIST=(1 4 8 16)  #(4 8 16 32 48 64 96 128 192 256)  # number of channels
+STEP_LIST=(40 58 80 128)  #(4 8 16 32 48 64 96 128 192 256)  # number of channels
 PARAM_VARY=timestep  # name of param for file/dict names ** doesn't have to match exactly the param variable name
 
 # RM search parameters
@@ -55,7 +56,9 @@ SIM_RM="-120 500"  # RM of simulated bursts to inject (should be within phi_max)
 
 # Output paths
 OUTDIR=/scratch/abernier/pulsar_data/search_results/${SOURCE}/20220826T064420Z_$(
-    [[ $SIM_FLAG -eq 1 ]] && echo "SIM2_" || echo ""
+    [[ $SLICE_BURST_FLAG -eq 1 ]] && echo "sliced_" || echo ""
+)$(
+    [[ $SIM_FLAG -eq 1 ]] && echo "SIM5.10_" || echo ""
 )${STOKES_SETTINGS}/${PARAM_VARY}  # output directory
 mkdir -p "$OUTDIR"  # Create output directory if it doesn't exist
 SAVE_FILE=${OUTDIR}/${PARAM_VARY}${SEARCH_TIME_STEP}.npz  # Final save file
@@ -70,6 +73,7 @@ echo "rm_search.py ${DATA_FILE} ${SAVE_FILE}\
       --rfi_mean_threshold ${RFI_MEAN_THRESHOLD} \
       --rfi_std_threshold ${RFI_STD_THRESHOLD} \
       --search_time_step ${SEARCH_TIME_STEP} \
+      --slice_burst_flag ${SLICE_BURST_FLAG} \
       --sim_flag ${SIM_FLAG} \
       --n_bursts ${N_BURSTS} \
       --sim_arrival_times ${SIM_TIMES} \
@@ -83,6 +87,7 @@ python rm_search.py ${DATA_FILE} ${SAVE_FILE}\
       --rfi_mean_threshold ${RFI_MEAN_THRESHOLD} \
       --rfi_std_threshold ${RFI_STD_THRESHOLD} \
       --search_time_step ${SEARCH_TIME_STEP} \
+      --slice_burst_flag ${SLICE_BURST_FLAG} \
       --sim_flag ${SIM_FLAG} \
       --n_bursts ${N_BURSTS} \
       --sim_arrival_times ${SIM_TIMES} \

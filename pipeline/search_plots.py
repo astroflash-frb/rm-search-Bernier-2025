@@ -201,7 +201,7 @@ if __name__ == "__main__":
             label_rmsf = f'RMSF_{PARAM}{param_list[i]}'
             
         # Plot masked + normalized Stokes data
-        plot_stokes(stokes_norm_masked[i], freq=freq[i], time=time[i], cbar_lim_max=0.5,
+        plot_stokes(stokes_norm_masked[i], freq=freq[i], time=time[i], cbar_lim_max=None,
                     t_unit='s', save_name=label_stokes, save_loc=SAVE_FIG_DIR)
 
         # Plot RMSF
@@ -245,3 +245,23 @@ if __name__ == "__main__":
     plot_efficiency_by_block(param_list, metadata_dict_list, timings_dict_list, 'Downsampling Factor', 
                              fig_title=None, save_name='efficiency', save_loc=SAVE_FIG_DIR,
                              plot_total=True, plot_ylog=False, convert_tstep=False)
+    
+    # SNR for FDF
+    print(f"Downsampling factors: {param_list}\n")
+    snr_arr = [
+        get_max_snr(
+            data = FDF_arr[i],  # shape (Ntime, Nphi)
+            phi_arr = phi_array[i],  # shape (Nphi,)
+            time = time_slice_arr[i],  # shape (Ntime,)
+            t_true = [2,6],
+            rm_true = RM_TRUE
+        ) 
+        for i in range(NFILES)
+    ]
+    fdf_snr_arr = np.array(snr_arr)   # shape [Nparams, Nbursts]
+
+    # **only getting true rm from sim burst metadata
+    plot_cpu_and_snr(param_arr=param_list, snr_arr = fdf_snr_arr,
+                     metadata_dict_list=metadata_dict_list,
+                     timings_dict_list=timings_dict_list, 
+                     save_loc=SAVE_FIG_DIR)
