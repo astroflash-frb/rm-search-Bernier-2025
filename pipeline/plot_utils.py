@@ -582,7 +582,7 @@ def plot_cpu_and_snr(param_arr, snr_arr, metadata_dict_list, timings_dict_list,
             label=rf"$\phi$={rm_true[i]}, t={t_true[i]} s"
         )
     
-    ax2.set_ylabel("S/R", color=rm_colors[0])
+    ax2.set_ylabel("S/N", color=rm_colors[0])
     ax2.tick_params(axis='y', labelcolor=rm_colors[0])
     
     
