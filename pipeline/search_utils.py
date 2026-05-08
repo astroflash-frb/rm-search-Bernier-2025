@@ -3,6 +3,44 @@ Utility functions for RM search pipeline, including RFI flagging, data normaliza
 """
 
 import numpy as np
+import astropy.units as u
+import baseband_operations as bo
+import pulsarbat as pb
+
+
+def read_stokes(source_dir, obs_night, start_frame, number_of_frames, dm, ref_freq, n_pixels_to_avg):
+        # Reshape and open the files for all frequencies (for chosen obs night) into readers
+    my_readers = bo.get_chime_readers(source_dir, internal=obs_night)
+
+    # Get a specific amount of data (in time) from the readers (Nframes, Nfreq, Npol)
+    dual_pol_signal = bo.lazy_read(start_frame, number_of_frames, my_readers)  # DualPolarizationSignal object
+
+    # Dedisperse & get stokes
+    dedisp_signal = pb.coherent_dedispersion(dual_pol_signal, dm, ref_freq=ref_freq)
+    stokes_signal = dedisp_signal.to_stokes()
+    stokes_signal = stokes_signal.compute()  # FullStokesSignal object
+
+    # Get time and frequency arrays
+    ntimes = stokes_signal.shape[stokes_signal.get_axis('time')]
+    time = np.linspace(0*u.s, stokes_signal.time_length - stokes_signal.dt, ntimes)
+    freq = np.linspace(stokes_signal.min_freq, stokes_signal.max_freq, stokes_signal.nchan)
+
+    # Downsample Stokes arrays and time array
+    stokes_arr = np.array([
+        stokes_signal.stokesI, 
+        stokes_signal.stokesQ, 
+        stokes_signal.stokesU, 
+        stokes_signal.stokesV
+    ])
+    full_stokes = np.array([
+        bo.shrink_any_2(d, [n_pixels_to_avg,1])  # d = 2d array w/ time on axis 0; [new time bins, new axis 1 bins]
+        for d in stokes_arr
+    ])  # shape (Nstokes, Ntimes, Nfreqs)
+    time = bo.shrink_any_2(time.to(u.s)[:,None], [n_pixels_to_avg,1]).flatten()
+    freq = freq.to(u.MHz).value
+
+    return full_stokes, time, freq
+
 
 def flag_rfi_manual(ranges, freqs):
     """
@@ -89,8 +127,50 @@ def normalize_data(data_array):
     
     mean_per_channel = np.nanmean(data_array, axis=1, keepdims=True)
     std_per_channel = np.nanstd(data_array, axis=1, keepdims=True)
+    std_per_channel[std_per_channel==0] = 1
     
     return (data_array - mean_per_channel) / std_per_channel
+
+
+def slice_around_burst(full_stokes, time, slice_width=0.1):
+
+    # Find highest burst in timeseries 
+    max_burst_t = time[np.argmax(np.nanmean(full_stokes[0], axis=1))]  # time of peak I
+    tstart, tstop = max_burst_t - slice_width, max_burst_t + slice_width  # slice width in seconds
+    tstart_ind, tstop_ind = np.argmin(abs(time-tstart)), np.argmin(abs(time-tstop))  # convert to indices
+
+    # Slice data around burst
+    new_stokes = full_stokes.copy()[:,tstart_ind:tstop_ind]  # slice data around burst
+    time_burst = time.copy()[tstart_ind:tstop_ind]  # new time axis
+
+    return new_stokes, time_burst
+
+
+def invert_delay(delay, freq, U, V):
+    """
+    Invert a delay (e.g. from a burst search) in the Stokes U and V spectra.
+
+    Parameters
+    ----------
+    delay : float or astropy Quantity
+        The delay to invert (in ns or with time units).
+    freq : array-like or astropy Quantity
+        The frequency array (in MHz or with frequency units).
+    U, V : 2D arrays
+        Stokes U and V arrays (shape: [Ntimes, Nfreqs]).
+    """
+    # Assign units if not given
+    if not isinstance(delay, u.quantity.Quantity):
+        delay = delay * u.ns
+    if not isinstance(freq, u.quantity.Quantity):
+        freq = freq * u.MHz
+    
+    # Invert delay in U and V 
+    arg = (2*np.pi * freq[None,:].to(1/u.s) * delay.to(u.s)).value  # x
+    U_no_delay = U*np.cos(arg) + V*np.sin(arg)  # U_no_delay = U'cosx + V'sinx
+    V_no_delay = -U*np.sin(arg) + V*np.cos(arg)  # V_no_delay = -U'sinx + V'cosx
+
+    return U_no_delay, V_no_delay
 
 
 def get_spectra(Q, U, freq,  t_range=[0,None], f_range=[0,None], normalize=True, replace_nans=True):
@@ -161,17 +241,3 @@ def rm_synthesis(P_spec, phi_array, b, K):
     RM_meas = phi_array[FDF_peak_ind]
 
     return RM_meas, FDF
-
-
-def slice_around_burst(full_stokes, time, slice_width=0.1):
-
-    # Find highest burst in timeseries 
-    max_burst_t = time[np.argmax(np.nanmean(full_stokes[0], axis=1))]  # time of peak I
-    tstart, tstop = max_burst_t - slice_width, max_burst_t + slice_width  # slice width in seconds
-    tstart_ind, tstop_ind = np.argmin(abs(time-tstart)), np.argmin(abs(time-tstop))  # convert to indices
-
-    # Slice data around burst
-    new_stokes = full_stokes.copy()[:,tstart_ind:tstop_ind]  # slice data around burst
-    time_burst = time.copy()[tstart_ind:tstop_ind]  # new time axis
-
-    return new_stokes, time_burst

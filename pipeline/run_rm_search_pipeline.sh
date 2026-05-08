@@ -24,15 +24,18 @@ echo "Environment loaded"
 
 
 # Source info
-SOURCE=2022_CHIME_B2111+46
+SOURCE_DIR=/scratch/abernier/pulsar_data/2022_CHIME_B2111+46
 OBS_NIGHT=20220826T064420Z
+DM=141.26  # pc/cm**3
+RM=-218.70  # rad/m**2
 
-# Input data path
-DATA_DIR=/scratch/abernier/pulsar_data/full_stokes
-SLICE_BURST_FLAG=0  # set to 1 to slice the data around the highest SNR burst, 0 to use the full data saved by baseband formatter
-TIME_RES=391  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
-STOKES_SETTINGS=bands45_timeavg${TIME_RES}_65files_start175
-DATA_FILE=${DATA_DIR}/${SOURCE}/${OBS_NIGHT}_${STOKES_SETTINGS}.npz
+# Data parameters
+START_FILE_IND=160
+NFILES=65
+REF_FREQ=600  # MHz
+NPIXELS_TO_AVG=391  # number of pixels to average together in time when reading in the data (391 = 1ms time resolution)
+                    # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
+SLICE_BURST_FLAG=0  # set to 1 to slice the data around the highest SNR burst, 0 to use the full data read into the array
 
 # Set up parameter to vary
 INDEX=${SLURM_ARRAY_TASK_ID}

@@ -1,8 +1,8 @@
 """
-Perform an RM search on the given full Stokes data.
+Perform an RM search on the given data.
 """
 
-from rm_search_utils import *  # contains all functions related to masking RFI, normalizing, and computing spectra and FDF
+from search_utils import *  # contains all functions related to masking RFI, normalizing, and computing spectra and FDF
 from sim_burst_utils import *  # contains all functions related to generating and injecting simulated bursts
 import argparse
 from time import perf_counter, process_time
@@ -17,26 +17,70 @@ from scipy.signal import correlate, correlation_lags
 import chime_frb_constants as constants
 
 
+
 # Get Arguments
 # ------------------------------------------------------------------------------
 parser = argparse.ArgumentParser()
 
 # Required
-parser.add_argument("data_file", type=Path, 
-                    help='Absolute path to .npz data file containing full_stokes, time, and frequency.')
+parser.add_argument("source_dir", type=Path, 
+                    help='Absolute path to directory containing data of the source to analyze.')
+parser.add_argument("obs_night", type=str, 
+                    help='Observation night to analyze.')
 parser.add_argument("save_file", type=Path, 
                     help='Absolute path to save .npz file with RM search results.')
 
 # Optional
 parser.add_argument(
-    "-p", 
+    "--true_rms",
+    type=float,
+    nargs='+',
+    default=None,
+    help='True RM values for data read in.'
+)
+parser.add_argument(
+    "--true_dm",
+    type=float,
+    default=0.0,
+    help='DM value (in pc/cm**3) to use when dedispersing the data read in (default: 0.0).'
+)
+parser.add_argument(
+    "--delay",
+    type=float,
+    default=0,
+    help='Time delay (in ns) to remove from the data read in. Default is 0 (no delay).'
+)
+parser.add_argument(
+    "--start_file_ind", 
+    type=int, 
+    default=0, 
+    help='Index of first file to read in (relative to raw baseband files, which are indexed in order of time). Default is 0.'
+)
+parser.add_argument(
+    "--nfiles", 
+    type=int, 
+    default=65, 
+    help='Number of files to read in (each file contains 50000 time samples). Default is 65.'
+)
+parser.add_argument(
+    "--ref_freq", 
+    type=float, 
+    default=600.0, 
+    help='Reference frequency (in MHz) to use when dedispersing the data (default: 600.0 MHz).'
+)
+parser.add_argument(
+    "--npixels_to_avg", 
+    type=int, 
+    default=391, 
+    help='Number of time bins to average over when reading in data (default: 391 = 1 ms).'
+)
+parser.add_argument(
     "--phi_max", 
     type=int, 
     default=None, 
     help='Maximum phi value for RM synthesis.'
 )
 parser.add_argument(
-    "-d", 
     "--dphi_scaling", 
     type=float, 
     default=0.1, 
@@ -57,8 +101,8 @@ parser.add_argument(
 parser.add_argument(
     "--search_time_step", 
     type=int, 
-    default=10, 
-    help='Number of time channels to average over during RM search (default: 10).'
+    default=1, 
+    help='Number of time channels to average over during RM search (default: 1).'
 )
 parser.add_argument(
     "--slice_burst_flag",
@@ -73,7 +117,7 @@ parser.add_argument(
     help='Set to 1 to inject simulated bursts, 0 to run without (default: 0).'
 )
 parser.add_argument(
-    "--n_bursts",
+    "--sim_n_bursts",
     type=int,
     default=0,
     help='Number of simulated bursts to inject if sim_flag=1 (default: 2).'
@@ -109,9 +153,21 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-# Files
-DATA_FILE = args.data_file
+# File info
+SOURCE_DIR = args.source_dir
+OBS_NIGHT = args.obs_night
 SAVE_FILE = args.save_file
+DM = pb.DispersionMeasure(args.true_dm * u.pc/u.cm**3)
+RM = args.true_rms * u.rad/u.m**2
+DELAY = args.delay * u.ns
+
+# Data info
+START_FILE_IND = args.start_file_ind
+NFILES = args.nfiles
+START_FRAME = START_FILE_IND * 50000
+NUMBER_OF_FRAMES = NFILES * 50000  # Nfiles * Nframes_per_file
+REF_FREQ = args.ref_freq * u.MHz  # reference frequency for dedispersion, in MHz
+NPIXELS_TO_AVG = args.npixels_to_avg
 SLICE_BURST_FLAG = args.slice_burst_flag
 
 # Search parameters
@@ -123,7 +179,7 @@ SEARCH_TIME_STEP = args.search_time_step
 
 # Simulation parameters 
 SIM_FLAG = args.sim_flag
-N_BURSTS = args.n_bursts
+SIM_N_BURSTS = args.sim_n_bursts
 SIM_ARRIVAL_TIMES = args.sim_arrival_times
 SIM_BURST_WIDTHS = args.sim_burst_widths
 SIM_SNR = args.sim_snr
@@ -132,7 +188,6 @@ SIM_PARAMS = None  # to be filled with sim params if SIM_FLAG=1
 
 # Other Constants & Globals
 RFI_RANGES = [(529,535), (482,483),(450,450),(452,452),(457,458),(462,467),(470,470),(477,477)]  # in MHz
-SAMPLE_RATE = constants.FPGA_COUNTS_PER_SECOND * u.Hz
 TIMINGS = {}
 _process = psutil.Process(os.getpid())
 
@@ -187,20 +242,24 @@ if __name__ == "__main__":
     # Start total timing
     measure_start("total")
 
-    # Open & Process Data (load, add sim bursts, mask RFI, normalize)
+    # Open Data
     # ------------------------------------------------------------------------------
-    measure_start("load_mask_normalize")
+    measure_start("read_and_dedisperse")
+    full_stokes, time, freq = read_stokes(SOURCE_DIR, OBS_NIGHT, 
+                                          START_FILE_IND, NFILES, 
+                                          DM, REF_FREQ, 
+                                          NPIXELS_TO_AVG)
+    measure_stop("read_and_dedisperse")
+ 
 
-    # Load data
-    full_stokes_npz = np.load(DATA_FILE)
-    full_stokes = full_stokes_npz['full_stokes']   # shape (Nstokes, Ntimes, Nfreqs)
-    time = full_stokes_npz['time']
-    freq = full_stokes_npz['freq']
+    # Process Data (add sim bursts, mask RFI, normalize)
+    # ------------------------------------------------------------------------------
+    measure_start("mask_and_normalize")
 
     # Inject bursts
     if SIM_FLAG:
         # Burst parameters
-        burst_params = gen_sim_burst_params(N_BURSTS, SIM_ARRIVAL_TIMES, SIM_BURST_WIDTHS, freq)
+        burst_params = gen_sim_burst_params(SIM_N_BURSTS, SIM_ARRIVAL_TIMES, SIM_BURST_WIDTHS, freq)
         
         # Pol fractions and angle
         pol_frac_linear = [0.7, 0.4]  # can also have diff fractions for U and Q
@@ -211,7 +270,7 @@ if __name__ == "__main__":
 
         # Build dict to save sim metadata
         SIM_PARAMS = {
-            'num_bursts': N_BURSTS,
+            'num_bursts': SIM_N_BURSTS,
             'arrival_times': SIM_ARRIVAL_TIMES,
             'burst_widths': SIM_BURST_WIDTHS,
             'snr': SIM_SNR,
@@ -224,15 +283,15 @@ if __name__ == "__main__":
 
         # Generate Stokes
         # component shape is (Nbursts, Nfreqs, Ntimes); sim shape is (Nfreqs, Ntimes)
-        I_components = gen_stokes_I(N_BURSTS, burst_params, freq, time, sigma_time, SIM_SNR)
+        I_components = gen_stokes_I(SIM_N_BURSTS, burst_params, freq, time, sigma_time, SIM_SNR)
         I_sim, Q_components, U_components, V_sim = gen_stokes_QUV(I_components, 
-                                                                  N_BURSTS, 
+                                                                  SIM_N_BURSTS, 
                                                                   pol_frac_linear, 
                                                                   pol_frac_circular, 
                                                                   psi_0_rad)
         
         # Add rotation measure & get full stokes array
-        Q_rot, U_rot = get_rot_stokes(I_components, Q_components, U_components, N_BURSTS, SIM_RM, freq)
+        Q_rot, U_rot = get_rot_stokes(I_components, Q_components, U_components, SIM_N_BURSTS, SIM_RM, freq)
         full_stokes_sim = np.array([I_sim.T, Q_rot.T, U_rot.T, V_sim.T])  # shape (Nstokes, Ntimes, Nfreqs)
 
         # Inject bursts in real data
@@ -252,7 +311,11 @@ if __name__ == "__main__":
     if SLICE_BURST_FLAG:
         stokes_norm_masked, time = slice_around_burst(stokes_norm_masked, time)
 
-    measure_stop("load_mask_normalize")
+    # Invert delay if given
+    if DELAY != 0*u.ns:
+        stokes_norm_masked[1], stokes_norm_masked[2] = invert_delay(DELAY, freq, stokes_norm_masked[1], stokes_norm_masked[2])
+
+    measure_stop("mask_and_normalize")
 
 
     # RMSF
