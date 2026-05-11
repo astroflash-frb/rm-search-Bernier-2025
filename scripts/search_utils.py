@@ -14,6 +14,7 @@ def read_stokes(source_dir, obs_night, start_frame, number_of_frames, dm, ref_fr
 
     # Get a specific amount of data (in time) from the readers (Nframes, Nfreq, Npol)
     dual_pol_signal = bo.lazy_read(start_frame, number_of_frames, my_readers)  # DualPolarizationSignal object
+    print(f"Read in data with shape (Nframes, Nfreqs, Npols) = {dual_pol_signal.shape}.")
 
     # Dedisperse & get stokes
     dedisp_signal = pb.coherent_dedispersion(dual_pol_signal, dm, ref_freq=ref_freq)
@@ -133,6 +134,26 @@ def normalize_data(data_array):
 
 
 def slice_around_burst(full_stokes, time, slice_width=0.1):
+    """
+    Slice the data around the highest SNR burst in the time series.
+    
+    Parameters
+    ----------
+    full_stokes : np.ndarray
+        Array of shape (Nstokes, Ntimes, Nfreqs) containing the Stokes parameters.
+    time : np.ndarray
+        Array of time values corresponding to the time axis of full_stokes (shape: [Ntimes,]).
+    slice_width : float
+        Width of the time slice around the burst to keep (in seconds). The slice will be
+        centered on the time of the highest SNR burst and will extend slice_width seconds before and after it.
+    
+    Returns
+    -------
+    new_stokes : np.ndarray
+        Sliced array of shape (Nstokes, Ntimes_slice, Nfreqs) containing the data around the burst.
+    time_burst : np.ndarray
+        Time array corresponding to the new_stokes data (shape: [Ntimes_slice,]), centered around the burst.
+    """
 
     # Find highest burst in timeseries 
     max_burst_t = time[np.argmax(np.nanmean(full_stokes[0], axis=1))]  # time of peak I
