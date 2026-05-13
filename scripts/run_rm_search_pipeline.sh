@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-1%2
+#SBATCH --array=0-9%5
 #
 #SBATCH --output=/scratch/abernier/logs/scripts/%j_%a.out
 #SBATCH --mail-user=audreanne.bernier@mail.mcgill.ca
@@ -28,6 +28,7 @@ SOURCE=2022_CHIME_B2111+46
 SOURCE_DIR=/scratch/abernier/pulsar_data/${SOURCE}
 OBS_NIGHT=20220826T064420Z
 DM=141.26  # pc/cm**3
+# DM=0
 RM=-218.70  # rad/m**2
 DELAY=-2.0  # ns
 
@@ -37,18 +38,18 @@ NFILES=65
 REF_FREQ=600  # MHz
 NPIXELS_TO_AVG=391  # number of pixels to average together in time when reading in the data (391 = 1ms time resolution)
                     # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
-SLICE_BURST_FLAG=1  # set to 1 to slice the data around the highest SNR burst, 0 to use the full data read into the array
+SLICE_BURST_FLAG=0  # set to 1 to slice the data around the highest SNR burst, 0 to use the full data read into the array
 
 # Set up parameter to vary
 INDEX=${SLURM_ARRAY_TASK_ID}
-STEP_LIST=(1 4)  #(4 8 16 32 48 64 96 128 192 256)  # number of channels
+STEP_LIST=(1 4 8 16 32 48 64 96 128 192)  #(1 4 8 16 32 48 64 96 128 192 256)  # number of channels
 PARAM_VARY=timestep  # name of param for file/dict names ** doesn't have to match exactly the param variable name
 
 # RM search parameters
 PHI_MAX=1500
 DPHI_SCALING=0.05
-RFI_MEAN_THRESHOLD=3
-RFI_STD_THRESHOLD=1
+RFI_MEAN_THRESHOLD=1.7
+RFI_STD_THRESHOLD=1.3
 SEARCH_TIME_STEP=${STEP_LIST[$INDEX]}  # Vary this parameter across array jobs
 
 # Simulation parameters
@@ -60,7 +61,7 @@ SIM_SNR="5 10"  # SNR of simulated bursts to inject (relative to noise in real t
 SIM_RM="-120 500"  # RM of simulated bursts to inject (should be within phi_max)
 
 # Output paths
-STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_start${START_FILE_IND}_delay${DELAY}
+STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_start${START_FILE_IND}_delay${DELAY}_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
 OUTDIR=/scratch/abernier/pulsar_data/search_results/${SOURCE}/20220826T064420Z/$(
     [[ $SLICE_BURST_FLAG -eq 1 ]] && echo "sliced_" || echo ""
 )$(

@@ -160,7 +160,7 @@ def downsample_time_mean(data, factor):
     return downsampled_data
     
 
-def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='', plot_true=False,
+def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='',
                  ax1_type='peak', ax2_ylabel=r'$\phi$ [rad/m$^2$]', t_unit='s',
                  xlim=None, ylim=None, suptitle=None, save_name=None, save_loc=None):
     """
@@ -172,7 +172,6 @@ def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='', plot_true=Fa
     time : Time array (shape: [Ntimes]).
     phi : Phi array (shape: [Nphi]).
     cbar_label : Colorbar label.
-    plot_true : If True, plot the true burst times as vertical dashed lines.
     ax1_type : Type of the first panel ('peak' for peak amplitude, 'mean' for mean amplitude).
     t_unit : Unit for the time axis (e.g., 'ms', 's').
     """
@@ -237,37 +236,68 @@ def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='', plot_true=Fa
     plt.close()
 
 
-def plot_cross_corr_slices(phi_lags, cross_corr_arr, known_bursts_inds=None, true_RM=None,
+def plot_folded_fdf(phi_arr, fdf_arr, lim_inds, true_RMs=None, 
+                    xmax=None, save_name=None, save_loc=None):
+    # Fold FDF around phi=0 by summing positive and negative phi sides
+    if fdf_arr.shape[0] <= 8:
+        print("Warning: FDF has very few phi bins, folding may not be meaningful.")
+    fdf_slice = abs(np.nanmean(fdf_arr[lim_inds[0]:lim_inds[1]], axis=0))
+    phi_zero_ind = np.argwhere(phi_arr==0)[0,0]  # index of phi=0 in phi_arr
+    folded_phi = phi_arr[phi_zero_ind:]
+    pos_phi_fdf = fdf_slice[phi_zero_ind:]
+    neg_phi_fdf = np.concatenate([[0], np.flip(fdf_slice[:phi_zero_ind])])
+    folded_fdf = (pos_phi_fdf + neg_phi_fdf)  # using sum
+
+    fig = plt.figure(figsize=(8,3))
+    
+    # FDF lines
+    pos_line, = plt.plot(folded_phi, pos_phi_fdf, lw=1, ls=":", c="k", alpha=0.7, label=f"$+\phi$ range")  # positive phi
+    neg_line, = plt.plot(folded_phi, neg_phi_fdf, lw=1, ls="--", c="k", alpha=0.7, label=f"$-\phi$ range")  # negative phi
+    combined_line, = plt.plot(folded_phi, folded_fdf, lw=1, c="rebeccapurple", label=f"Sum")  # sum
+    
+    for i,rm in enumerate(true_RMs):
+        plt.axvline(x=abs(rm), label=rf'True $\phi_{i+1}$ = {rm}', c='dodgerblue', linestyle='--', alpha=0.6)
+    plt.axvspan(-10, 10, alpha=0.5, color='lightgrey')
+
+    # Axes & Labels
+    plt.legend(handles=[combined_line, pos_line, neg_line], loc="upper right")
+    fig.supylabel("FDF Amplitude")
+    fig.supxlabel(r'|$\phi$| [rad/m$^2$]')
+    if xmax is not None:
+        plt.xlim(0,xmax)
+
+    # Save figure
+    plt.tight_layout()
+    if save_name is not None and save_loc is not None:
+        plt.savefig(save_loc + save_name, dpi=200)
+    plt.close()
+
+
+
+def plot_cross_corr_slices(phi_lags, cross_corr_arr, true_RMs=None,
                            save_name=None, save_loc=None):
     
     plt.figure(figsize=(9, 6))
-    plt.title('Cross-Correlation of FDF with RMSF')
+    plt.title('Cross-Correlation of FDF with RMSF (downsampled by 8)')
 
    # Downsample & plot data
+    if cross_corr_arr.shape[0] <= 8:
+        print("Warning: Cross-correlation has very few phi bins, downsampling may not be meaningful.")
     downsampled_cross_corr = downsample_time_mean(cross_corr_arr, factor=8)
     for i,t_slice in enumerate(downsampled_cross_corr):
-        # color = 'dodgerblue' if i in [ind1-1, ind1, ind1+1] else ('orange' if i in [ind2-1, ind2, ind2+1] else 'black')
-        # color above is to have all lines ~ time of bursts not be black
-        color = 'k'
-        plt.plot(phi_lags, abs(t_slice), color=color, alpha=0.2, lw=0.7)
-
-    # empty plot for noise label
-    # plt.plot([], [], color='black', alpha=1, lw=1, label='Noise slices')
-
-    # (Re) Plot known burst slices (to have them in color)
-    # plt.plot(phi_lags, abs(cross_corr_arr[ind1]), color='dodgerblue', label=f'Burst 1 ({time_slice_arr[ind1]:.1f} {t_unit})')
-    # plt.plot(phi_lags, abs(cross_corr_arr[ind2]), color='orange', label=f'Burst 2 ({time_slice_arr[ind2]:.1f} {t_unit})')
+        plt.plot(phi_lags, abs(t_slice), color='k', alpha=0.2, lw=0.7)
+    plt.plot([], [], color='black', alpha=1, lw=1, label='FDFs')  # for slice label
 
     # Vertical lines at true RM (phi) of burst(s)
-    num_colors = len(true_RM)
+    num_colors = len(true_RMs)
     tab = 'tab10' if num_colors<=10 else 'tab20'
     cmap = plt.colormaps[tab]
     rm_colors = [cmap(i / num_colors) for i in range(num_colors)]
     
-    for i,RM in enumerate(true_RM):
-        plt.axvline(x=RM, label=rf'True $\phi_{i+1}$ = {RM}', color=rm_colors[i], linestyle='--', alpha=0.6)
+    for i,rm in enumerate(true_RMs):
+        plt.axvline(x=rm, label=rf'True $\phi_{i+1}$ = {rm}', color=rm_colors[i], linestyle='--', alpha=0.6)
 
-    # Labels
+    # Axes & Labels
     plt.xlabel(r'$\phi$ [rad/m$^2$]')
     plt.ylabel('Amplitude')
     plt.xlim(-700, 700)

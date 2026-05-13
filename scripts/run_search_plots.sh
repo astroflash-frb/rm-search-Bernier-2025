@@ -19,15 +19,17 @@ echo "Modules loaded"
 source /home/abernier/envs/tril_env/bin/activate
 echo "Environment loaded"
 
-
-# Parameters
-TIME_RES=391  # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
-SETTINGS=2022_CHIME_B2111+46/20220826T064420Z_SIM5.10_bands45_timeavg${TIME_RES}_65files_start175  # Specify which Stokes data was used in the search
+# Search results info
+SOURCE=2022_CHIME_B2111+46
+OBS_NIGHT=20220826T064420Z
+RESULTS_DIR=/scratch/abernier/pulsar_data/search_results/${SOURCE}/${OBS_NIGHT}
+SETTINGS=timeavg391_nfiles65_start160_delay-2.0_RFI1.7mean1.3std
 PARAM=timestep  # Specify which parameter was varied in the search results to plot
-RM_TRUE="-120 500"  # true burst -218.70
+BURST_LIMS="1.1 1.15"  # to slice around burst for plots
 
-# Run Ploting Script
-cd /home/abernier/scratch/rm-search-Bernier-2025/pipeline
-echo "search_plots.py ${SETTINGS} ${PARAM} --rm_true ${RM_TRUE}"
-
-python search_plots.py ${SETTINGS} ${PARAM} --rm_true ${RM_TRUE}
+# Run plotting script
+cd /home/abernier/scratch/rm-search-Bernier-2025/scripts
+echo "search_plots.py ${RESULTS_DIR} ${SETTINGS} ${PARAM} \
+      --burst_lims ${BURST_LIMS}"
+python search_plots.py ${RESULTS_DIR} ${SETTINGS} ${PARAM} \
+      --burst_lims ${BURST_LIMS}

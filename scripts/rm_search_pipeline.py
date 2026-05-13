@@ -190,7 +190,7 @@ SIM_NUM_BURSTS = args.sim_num_bursts
 SIM_ARRIVAL_TIMES = args.sim_arrival_times
 SIM_BURST_WIDTHS = args.sim_burst_widths
 SIM_SNR = args.sim_snr
-SIM_RM = args.sim_rm
+SIM_RM = args.sim_rm * u.rad/u.m**2
 SIM_PARAMS = None  # to be filled with sim params if SIM_FLAG=1
 
 # Other Constants & Globals
@@ -323,7 +323,7 @@ if __name__ == "__main__":
 
     # Invert delay if given
     if DELAY != 0*u.ns:
-        stokes_norm_masked[1], stokes_norm_masked[2] = invert_delay(DELAY, freq, stokes_norm_masked[1], stokes_norm_masked[2])
+        stokes_norm_masked[2], stokes_norm_masked[3] = invert_delay(DELAY, freq, stokes_norm_masked[2], stokes_norm_masked[3])
 
     measure_stop("mask_and_normalize")
 
@@ -435,7 +435,7 @@ if __name__ == "__main__":
     summary_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_summary.txt")
     arrays_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_arrays.npz")
     metadata_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_metadata.npz")
-    timing_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_timing.npz")
+    timing_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_timings.npz")
 
     # Compute some additional metrics for metadata
     dt_stokes = (NPIXELS_TO_AVG / (constants.FPGA_COUNTS_PER_SECOND * u.Hz)).to(u.ms)  # time resolution of the Stokes data, in ms
@@ -517,8 +517,8 @@ if __name__ == "__main__":
         time_slice_arr=time_slice_arr.astype(np.float32),   # shape (Ntimes_fdf,)
         lambda2_array=lambda2_array.astype(np.float32),     # shape (Nlambda,) = (Nfreq,)
         phi_array=phi_array.astype(np.float32),             # shape (Nphi,)
-        cross_corr_arr=cross_corr_arr.astype(np.float32),   # shape (Ntimes_fdf, Nphilags)
-        phi_lags=phi_lags.astype(np.float32)                # shape (Nphilags,)
+        cross_corr_arr=cross_corr_arr.astype(np.float32),   # shape (Ntimes_fdf, Nphi_lags)
+        phi_lags=phi_lags.astype(np.float32)                # shape (Nphi_lags,)
     )
 
     # -- Save metadata --
