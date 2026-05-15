@@ -22,7 +22,7 @@ parser.add_argument("settings", type=str,
                     help='Specify which Stokes data was used in the search.')
 parser.add_argument("param", type=str, 
                     help='Specify the varied parameter to plot results for.')
-parser.add_argument("--burst_lims", nargs=2, type=float, default=None,
+parser.add_argument("--burst_lims", nargs='+', type=float, default=None,
                     help='Time limits (in seconds) to average over burst in some plots. Provide as two numbers: --burst_lims tmin tmax')
 args = parser.parse_args()
 
@@ -32,6 +32,8 @@ SETTINGS = args.settings
 PARAM = args.param
 PARAM_DIR = f"{RESULTS_DIR}/{SETTINGS}/{PARAM}/"
 BURST_LIMS = args.burst_lims
+if BURST_LIMS == [0]:
+    BURST_LIMS = None  # interpret burst_lims of 0 as no limits (i.e. use full time range for plots)
 
 # Search result files
 METADATA_FILES = sorted(glob.glob(os.path.join(PARAM_DIR, f"{PARAM}*_metadata.npz")), key=len)
@@ -125,12 +127,12 @@ if __name__ == "__main__":
                 )
             except Exception:
                 print(f"  - {k}", file=SUMMARY_FILE)
+        
+        print("\n[PLOTS]", file=SUMMARY_FILE)
 
 
-
-    # Plots
-    # ------------------------------------------------------------------------------
     # Plot Data
+    # ------------------------------------------------------------------------------
     for i,p in enumerate(param_list):
         # Get file labels
         if DATA_FILES_UNIQUE:
@@ -158,6 +160,13 @@ if __name__ == "__main__":
 
     
     # Plot FDF and cross-correlation results
+    # ------------------------------------------------------------------------------
+    # Get true RMs (using 1st file)
+    rm_true = list(metadata[param_list[0]]['true_rms_rad_m2'].value)  # true RM of real data *Quantity array*
+    if metadata[param_list[0]]['sim_flag']:
+        sim_rm = metadata[param_list[0]]['sim_params']["rm"]  # true RM of injected bursts
+        rm_true.append(sim_rm.value)
+
     for p in param_list:
         # Get arrays to plot
         FDF_arr = data[p]['FDF_arr']  # shape (Ntime_fdf, Nphi)
@@ -166,45 +175,39 @@ if __name__ == "__main__":
         cross_corr_arr = data[p]['cross_corr_arr']  # shape (Ntime_fdf, Nphi_lags)
         phi_lags = data[p]['phi_lags']  # shape (Nphi_lags,)
 
-        # Get true RMs
-        rm_true = list(metadata[p]['true_rms_rad_m2'].value)  # true RM of real data *Quantity array*
-        if metadata[p]['sim_flag']:
-            sim_rm = metadata[p]['sim_params']["rm"]  # true RM of injected bursts
-            rm_true.append(sim_rm.value)
-        
-        # Get burst time limits as indices
-        if BURST_LIMS is not None:
-            inds = [
-                np.argmin(abs(time_slice_arr-BURST_LIMS[0])),
-                np.argmin(abs(time_slice_arr-BURST_LIMS[1]))
-            ]
-        else:
-            inds = [0, len(time_slice_arr)]  # use full time range if no burst limits provided
-
         # FDF
         plot_2panels(FDF_arr, time_slice_arr, phi_array, 
                      cbar_label='Amplitude', suptitle='FDF', 
                      save_name=f'FDF_{PARAM}{p}', save_loc=SAVE_FIG_DIR)
         
-        # Folded FDF slice plot
-        plot_folded_fdf(phi_array, FDF_arr, xmax=500,
-                        lim_inds=inds, true_RMs=rm_true, 
-                        save_name=f'FDF_folded_{PARAM}{p}', save_loc=SAVE_FIG_DIR)
+
+        # Folded FDF plot - SINGLE PANEL
+        # plot_folded_fdf_panel(data, p, lim_time=BURST_LIMS, xmax=500, true_RMs=rm_true, 
+        #                       save_name=f'FDF_folded_{PARAM}{p}', save_loc=SAVE_FIG_DIR)
         
         # Cross-correlation
         plot_2panels(cross_corr_arr, time_slice_arr, phi_lags, ylim=(-1500,1500),
                      cbar_label='Amplitude', suptitle='Cross-correlation',
                      save_name=f'crosscorr_{PARAM}{p}', save_loc=SAVE_FIG_DIR)
     
-
         # Cross-correlation slices plot
         plot_cross_corr_slices(phi_lags, cross_corr_arr, 
                                true_RMs=rm_true,
                                save_name=f'crosscorr_slices_{PARAM}{p}',
                                save_loc=SAVE_FIG_DIR
                                )
+        
+    
+    # Folded FDF plot - MULTIPLE PANELS (for different values of varied param)
+    # ------------------------------------------------------------------------------
+    plot_folded_fdf(data, param_list, param_name=PARAM, summary_file=summary_file,
+                    lim_time=BURST_LIMS, true_RMs=rm_true, xmax=500,
+                    save_name=f"FDF_folded_allpanels", save_loc=SAVE_FIG_DIR)
+        
     
     exit(0)
+
+
 
     # Time Curves
     # ------------------------------------------------------------------------------

@@ -9,8 +9,9 @@ import pulsarbat as pb
 
 
 def read_stokes(source_dir, obs_night, start_frame, number_of_frames, dm, ref_freq, n_pixels_to_avg):
-        # Reshape and open the files for all frequencies (for chosen obs night) into readers
+    # Reshape and open the files for all frequencies (for chosen obs night) into readers
     my_readers = bo.get_chime_readers(source_dir, internal=obs_night)
+    total_num_frames = my_readers[0].shape[0]
 
     # Get a specific amount of data (in time) from the readers (Nframes, Nfreq, Npol)
     dual_pol_signal = bo.lazy_read(start_frame, number_of_frames, my_readers)  # DualPolarizationSignal object
@@ -22,7 +23,7 @@ def read_stokes(source_dir, obs_night, start_frame, number_of_frames, dm, ref_fr
     stokes_signal = stokes_signal.compute()  # FullStokesSignal object
 
     # Get time and frequency arrays
-    ntimes = stokes_signal.shape[stokes_signal.get_axis('time')]
+    ntimes = stokes_signal.shape[stokes_signal.get_axis('time')]  # num frames after dedispersion
     time = np.linspace(0*u.s, stokes_signal.time_length - stokes_signal.dt, ntimes)
     freq = np.linspace(stokes_signal.min_freq, stokes_signal.max_freq, stokes_signal.nchan)
 
@@ -39,8 +40,16 @@ def read_stokes(source_dir, obs_night, start_frame, number_of_frames, dm, ref_fr
     ])  # shape (Nstokes, Ntimes, Nfreqs)
     time = bo.shrink_any_2(time.to(u.s)[:,None], [n_pixels_to_avg,1]).flatten()
     freq = freq.to(u.MHz).value
+    final_num_frames = full_stokes.shape[1]
 
-    return full_stokes, time, freq
+    # time info dict to return
+    frame_info_dict = {
+        'total_num_frames' : total_num_frames,
+        'num_frames_after_dedispersion' : ntimes,
+        'num_frames_stokes' : final_num_frames
+    }
+
+    return full_stokes, time, freq, frame_info_dict
 
 
 def flag_rfi_manual(ranges, freqs):

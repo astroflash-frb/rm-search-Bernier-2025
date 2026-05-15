@@ -236,36 +236,157 @@ def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='',
     plt.close()
 
 
-def plot_folded_fdf(phi_arr, fdf_arr, lim_inds, true_RMs=None, 
-                    xmax=None, save_name=None, save_loc=None):
-    # Fold FDF around phi=0 by summing positive and negative phi sides
-    if fdf_arr.shape[0] <= 8:
-        print("Warning: FDF has very few phi bins, folding may not be meaningful.")
-    fdf_slice = abs(np.nanmean(fdf_arr[lim_inds[0]:lim_inds[1]], axis=0))
-    phi_zero_ind = np.argwhere(phi_arr==0)[0,0]  # index of phi=0 in phi_arr
+def compute_folded_fdf(phi_arr, fdf_arr, lim_inds):
+    """
+    Compute the folded FDF by summing the positive and negative phi sides of the FDF.
+    Returns the folded phi array and folded FDF array.
+    """
+    fdf_slice = abs(np.nanmean(fdf_arr[lim_inds[0]:lim_inds[1]+1], axis=0))
+    phi_zero_ind = np.argmin(np.abs(phi_arr))  # index of phi=0 in phi_arr
     folded_phi = phi_arr[phi_zero_ind:]
     pos_phi_fdf = fdf_slice[phi_zero_ind:]
     neg_phi_fdf = np.concatenate([[0], np.flip(fdf_slice[:phi_zero_ind])])
     folded_fdf = (pos_phi_fdf + neg_phi_fdf)  # using sum
 
-    fig = plt.figure(figsize=(8,3))
+    return folded_phi, pos_phi_fdf, neg_phi_fdf, folded_fdf
+
+
+def get_lim_inds(time_arr, lim_time):
+    """
+    Get the indices corresponding to the time limits of the burst.
+    """
+    default_inds = [0, len(time_arr)-1]
+    if lim_time is None:
+        return default_inds
+
+    inds = [
+        np.argmin(np.abs(time_arr - lim_time[0])),
+        np.argmin(np.abs(time_arr - lim_time[1]))
+    ]
+
+    # If slice is empty, use full time range and print warning
+    if inds[0] == inds[1]:
+        print(
+            "Warning: Burst limits map to the same time index. "
+            "Using full time range for folded FDF."
+        )
+        # return default_inds
+        return [inds[0]-1, inds[0]+1]  # take one bin on either side to ensure non-empty slice
+
+    return inds
+
+
+def plot_folded_fdf_panel(data_dict, param, lim_time=None, ax=None, true_RMs=None, xmax=None,
+                          color="rebeccapurple", label="Sum", show_labels=True,
+                          save_name=None, save_loc=None, summary_file=None):
+    """
+    Plot a folded FDF panel onto an axis.
+    """
+    # Create figure and axis if not provided
+    if ax is None: fig, ax = plt.subplots(figsize=(8, 3))
+    else: fig = ax.figure
     
+    # Get time slide indices corresponding to burst limits (if provided)
+    time_slice_arr = data_dict[param]['time_slice_arr']  # shape (Ntime_fdf,)
+    lim_inds = get_lim_inds(time_slice_arr, lim_time)
+    tstart, tstop = time_slice_arr[lim_inds[0]], time_slice_arr[lim_inds[1]]
+    with open(summary_file, 'a') as f:
+        print(f"({label}) {tstart:.2f} - {tstop:.2f} s", file=f)
+
+    # Fold FDF around phi=0 by summing positive and negative phi sides
+    folded_phi, pos_phi_fdf, neg_phi_fdf, folded_fdf = \
+        compute_folded_fdf(data_dict[param]['phi_array'],  # shape (Nphi,)
+                           data_dict[param]['FDF_arr'],  # shape (Ntime_fdf, Nphi) 
+                           lim_inds)
+
     # FDF lines
-    pos_line, = plt.plot(folded_phi, pos_phi_fdf, lw=1, ls=":", c="k", alpha=0.7, label=f"$+\phi$ range")  # positive phi
-    neg_line, = plt.plot(folded_phi, neg_phi_fdf, lw=1, ls="--", c="k", alpha=0.7, label=f"$-\phi$ range")  # negative phi
-    combined_line, = plt.plot(folded_phi, folded_fdf, lw=1, c="rebeccapurple", label=f"Sum")  # sum
+    pos_line, = ax.plot(folded_phi, pos_phi_fdf, lw=1, ls=":", c="k", alpha=0.7, label=f"$+\phi$ range")  # positive phi
+    neg_line, = ax.plot(folded_phi, neg_phi_fdf, lw=1, ls="--", c="k", alpha=0.7, label=f"$-\phi$ range")  # negative phi
+    combined_line, = ax.plot(folded_phi, folded_fdf, lw=1, c=color, label=label)  # sum
     
-    for i,rm in enumerate(true_RMs):
-        plt.axvline(x=abs(rm), label=rf'True $\phi_{i+1}$ = {rm}', c='dodgerblue', linestyle='--', alpha=0.6)
-    plt.axvspan(-10, 10, alpha=0.5, color='lightgrey')
+    # True RM lines & highlight region around phi=0
+    if true_RMs is not None:
+        for i,rm in enumerate(true_RMs):
+            ax.axvline(x=abs(rm), label=rf'True $\phi_{i+1}$ = {rm}', c='dodgerblue', linestyle='--', alpha=0.6)
+    ax.axvspan(-10, 10, alpha=0.5, color='lightgrey')
 
     # Axes & Labels
-    plt.legend(handles=[combined_line, pos_line, neg_line], loc="upper right")
+    if show_labels:
+        ax.legend(handles=[combined_line, pos_line, neg_line], loc="upper right")
+        fig.supylabel("FDF Amplitude")
+        fig.supxlabel(r'|$\phi$| [rad/m$^2$]')
+    else:
+        ax.legend(title=f"{tstart:.2f} - {tstop:.2f} s", handles=[combined_line], loc="upper right")
+    if xmax is not None:
+        ax.set_xlim(0, xmax)
+
+    # Save figure
+    if save_name is not None and save_loc is not None:
+        plt.tight_layout()
+        plt.savefig(save_loc + save_name, dpi=200)
+        plt.close()
+    
+    return fig, ax, (combined_line, pos_line, neg_line)
+
+
+
+def plot_folded_fdf(data_dict, param_list, param_name='param',
+                    lim_time=None, true_RMs=None, xmax=None, 
+                    save_name=None, save_loc=None, summary_file=None):
+    """
+    Multi-panel folded FDF plot (for different values of a varied parameter). 
+    See plot_folded_fdf_panel for single panel function.
+    """
+
+    # Param info
+    Nparams = len(param_list)
+    with open(summary_file, 'a') as f:
+        print(f"Plotting folded FDF panels for {Nparams} values of {param_name}: {param_list}", file=f)
+        print(f"Input time limits: {lim_time}", file=f)
+        print("Actual time limits for folded FDF:", file=f)
+
+    # Figure setup
+    fig, axes = plt.subplots(
+        Nparams,
+        1,
+        figsize=(8, 2 * Nparams),
+        sharex=True,
+        dpi=200
+    )
+    if Nparams == 1:
+        axes = [axes]
+    cmap = plt.colormaps["tab20b"]
+    if param_name == "timestep":
+        param_name = "Downsampling Factor"
+
+    # Plot panels
+    for i, p in enumerate(param_list):
+        color = cmap(i / Nparams)
+        _, _, lines = plot_folded_fdf_panel(
+            data_dict=data_dict,
+            param=p,
+            lim_time=lim_time,
+            ax=axes[i],
+            true_RMs=true_RMs,
+            xmax=xmax,
+            color=color,
+            label=f"{param_name} = {p}",
+            show_labels=False,
+            # not enabling savefig
+            summary_file=summary_file
+        )
+        _, pos_line, neg_line = lines
+
+    # Legend & labels
+    fig.legend(
+        handles=[pos_line, neg_line],
+        loc="upper center",
+        ncol=2,
+        bbox_to_anchor=(0.5, 1.013)
+    )
     fig.supylabel("FDF Amplitude")
     fig.supxlabel(r'|$\phi$| [rad/m$^2$]')
-    if xmax is not None:
-        plt.xlim(0,xmax)
-
+    
     # Save figure
     plt.tight_layout()
     if save_name is not None and save_loc is not None:

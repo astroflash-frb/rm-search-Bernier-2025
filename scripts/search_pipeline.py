@@ -252,10 +252,10 @@ if __name__ == "__main__":
     # Open Data
     # ------------------------------------------------------------------------------
     measure_start("read_and_dedisperse")
-    full_stokes, time, freq = read_stokes(SOURCE_DIR, OBS_NIGHT+"_CHIME_vdif", 
-                                          START_FRAME, NUMBER_OF_FRAMES, 
-                                          DM, REF_FREQ, 
-                                          NPIXELS_TO_AVG)
+    full_stokes, time, freq, frame_info_dict = read_stokes(SOURCE_DIR, OBS_NIGHT+"_CHIME_vdif", 
+                                                            START_FRAME, NUMBER_OF_FRAMES, 
+                                                            DM, REF_FREQ, 
+                                                            NPIXELS_TO_AVG)
     print(f"Data shape (Nstokes, Ntimes, Nfreqs): {full_stokes.shape}")
     print(f"Time array shape: {time.shape}, Time range: {time[0]:.3f} - {time[-1]:.3f} s")
     print(f"Frequency array shape: {freq.shape}, Frequency range: {freq[0]:.2f} - {freq[-1]:.2f} MHz")
@@ -438,8 +438,16 @@ if __name__ == "__main__":
     timing_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_timings.npz")
 
     # Compute some additional metrics for metadata
-    dt_stokes = (NPIXELS_TO_AVG / (constants.FPGA_COUNTS_PER_SECOND * u.Hz)).to(u.ms)  # time resolution of the Stokes data, in ms
+    dt_file = (1 / (constants.FPGA_COUNTS_PER_SECOND * u.Hz)).to(u.ms)  # time resolution of the original data files, in ms
+    dt_stokes = (NPIXELS_TO_AVG * dt_file).to(u.ms)  # time resolution of the Stokes data, in ms
     df_stokes = (400 / 1024) * u.MHz  # frequency resolution, 1024 channels across 400 MHz bandwidth
+    total_num_frames = frame_info_dict['total_num_frames']  # total number of frames loaded
+    total_duration_min = (total_num_frames * dt_file).to(u.min)  # ^^in minutes
+    read_duration_min = (NUMBER_OF_FRAMES * dt_file).to(u.s)  # duration of data actually read into memory, in minutes
+    num_frames_dedisp = frame_info_dict['num_frames_after_dedispersion']  # number of frames after dedispersion
+    dedisp_duration_min = (num_frames_dedisp * dt_file).to(u.s)  # ^^in minutes
+    num_frames_stokes = frame_info_dict['num_frames_stokes']  # number of frames after downsampling to Stokes
+    stokes_duration_min = (num_frames_stokes * dt_stokes).to(u.s)  # ^^in minutes
 
     # Build metadata
     metadata = {
@@ -550,7 +558,12 @@ if __name__ == "__main__":
 
         # Data info
         print("\n[DATA]", file=SUMMARY_FILE)
-        print(f"Read {NFILES} files ({NUMBER_OF_FRAMES} frames)", file=SUMMARY_FILE)
+        print(f"Total number of frames loaded        : ~{total_num_frames} (~{total_duration_min:.3f})", file=SUMMARY_FILE)
+        print(f"Read {NFILES} files ({NUMBER_OF_FRAMES} frames = {read_duration_min:.3f}) into memory", file=SUMMARY_FILE)
+        print(f"Number of frames after de-dispersion : {num_frames_dedisp} ({dedisp_duration_min:.3f})", file=SUMMARY_FILE)
+        print(f"Number of frames after downsampling  : {num_frames_stokes} ({stokes_duration_min:.3f})", file=SUMMARY_FILE)
+        if SLICE_BURST_FLAG:
+            print(f"Sliced data around burst, new number of time samples: {len(time)}", file=SUMMARY_FILE)
         print(f"Stokes shape           : {stokes_norm_masked.shape} (Nstokes, Ntimes, Nfreqs)", file=SUMMARY_FILE)
         print(f"Frequency range        : {freq[0]:.2f} - {freq[-1]:.2f} MHz", file=SUMMARY_FILE)
         print(f"Time duration          : {time[-1] - time[0]:.3f} s", file=SUMMARY_FILE)

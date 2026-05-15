@@ -23,6 +23,12 @@ source /home/abernier/envs/tril_env/bin/activate
 echo "Environment loaded"
 
 
+# Set up parameter to vary
+INDEX=${SLURM_ARRAY_TASK_ID}
+STEP_LIST=(1 4 8 16 32 48 64 96 128 192)  #(1 4 8 16 32 48 64 96 128 192 256)  # number of channels
+PARAM_VARY=timestep  # name of param for file/dict names ** doesn't have to match exactly the param variable name
+
+
 # Source info/properties
 SOURCE=2022_CHIME_B2111+46
 SOURCE_DIR=/scratch/abernier/pulsar_data/${SOURCE}
@@ -39,11 +45,6 @@ REF_FREQ=600  # MHz
 NPIXELS_TO_AVG=391  # number of pixels to average together in time when reading in the data (391 = 1ms time resolution)
                     # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
 SLICE_BURST_FLAG=0  # set to 1 to slice the data around the highest SNR burst, 0 to use the full data read into the array
-
-# Set up parameter to vary
-INDEX=${SLURM_ARRAY_TASK_ID}
-STEP_LIST=(1 4 8 16 32 48 64 96 128 192)  #(1 4 8 16 32 48 64 96 128 192 256)  # number of channels
-PARAM_VARY=timestep  # name of param for file/dict names ** doesn't have to match exactly the param variable name
 
 # RM search parameters
 PHI_MAX=1500
@@ -63,9 +64,11 @@ SIM_RM="-120 500"  # RM of simulated bursts to inject (should be within phi_max)
 # Output paths
 STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_start${START_FILE_IND}_delay${DELAY}_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
 OUTDIR=/scratch/abernier/pulsar_data/search_results/${SOURCE}/20220826T064420Z/$(
+    [[ $SIM_FLAG -eq 1 ]] && echo "SIM_" || echo ""
+)$(
     [[ $SLICE_BURST_FLAG -eq 1 ]] && echo "sliced_" || echo ""
 )$(
-    [[ $SIM_FLAG -eq 1 ]] && echo "SIM_" || echo ""
+    [[ $DM -eq 0 ]] && echo "noDM_" || echo ""
 )${STOKES_SETTINGS}/${PARAM_VARY}  # output directory
 mkdir -p "$OUTDIR"  # Create output directory if it doesn't exist
 SAVE_FILE=${OUTDIR}/${PARAM_VARY}${SEARCH_TIME_STEP}.npz  # Final save file
@@ -74,7 +77,7 @@ SAVE_FILE=${OUTDIR}/${PARAM_VARY}${SEARCH_TIME_STEP}.npz  # Final save file
 
 # Run RM Search
 cd /home/abernier/scratch/rm-search-Bernier-2025/scripts
-echo "rm_search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
+echo "search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
       --true_dm ${DM} \
       --true_rms ${RM} \
       --delay ${DELAY} \
@@ -95,7 +98,7 @@ echo "rm_search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
       --sim_snr ${SIM_SNR} \
       --sim_rm ${SIM_RM}"
 
-python rm_search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
+python search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
       --true_dm ${DM} \
       --true_rms ${RM} \
       --delay ${DELAY} \

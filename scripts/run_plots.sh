@@ -25,11 +25,11 @@ OBS_NIGHT=20220826T064420Z
 RESULTS_DIR=/scratch/abernier/pulsar_data/search_results/${SOURCE}/${OBS_NIGHT}
 SETTINGS=timeavg391_nfiles65_start160_delay-2.0_RFI1.7mean1.3std
 PARAM=timestep  # Specify which parameter was varied in the search results to plot
-BURST_LIMS="1.1 1.15"  # to slice around burst for plots
+BURST_LIMS="1.10 1.15"  # to slice around burst for plots
 
 # Run plotting script
 cd /home/abernier/scratch/rm-search-Bernier-2025/scripts
-echo "search_plots.py ${RESULTS_DIR} ${SETTINGS} ${PARAM} \
+echo "plots.py ${RESULTS_DIR} ${SETTINGS} ${PARAM} \
       --burst_lims ${BURST_LIMS}"
-python search_plots.py ${RESULTS_DIR} ${SETTINGS} ${PARAM} \
+python plots.py ${RESULTS_DIR} ${SETTINGS} ${PARAM} \
       --burst_lims ${BURST_LIMS}
