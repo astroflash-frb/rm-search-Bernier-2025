@@ -137,7 +137,7 @@ def plot_rmsf(phi_array, RMSF, RMSF_full, save_loc=None, save_name='RMSF'):
     plt.legend(loc='upper right')
 
     if save_name is not None and save_loc is not None:
-        plt.savefig(save_loc + save_name, dpi=300)
+        plt.savefig(save_loc + save_name + ".png", dpi=300)
     plt.close()
 
 
@@ -232,23 +232,81 @@ def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='',
     
     # --- Save Figure --
     if save_name is not None and save_loc is not None:
-        plt.savefig(save_loc + save_name, dpi=300)
+        plt.savefig(save_loc + save_name + ".png", dpi=300)
     plt.close()
 
 
-def compute_folded_fdf(phi_arr, fdf_arr, lim_inds):
+def plot_cross_corr_slices(phi_lags, cross_corr_arr, true_RMs=None,
+                           save_name=None, save_loc=None):
+    
+    plt.figure(figsize=(9, 6))
+    plt.title('Cross-Correlation of FDF with RMSF (downsampled by 8)')
+
+   # Downsample & plot data
+    if cross_corr_arr.shape[0] <= 8:
+        print("Warning: Cross-correlation has very few phi bins, downsampling may not be meaningful.")
+    downsampled_cross_corr = downsample_time_mean(cross_corr_arr, factor=8)
+    for i,t_slice in enumerate(downsampled_cross_corr):
+        plt.plot(phi_lags, abs(t_slice), color='k', alpha=0.2, lw=0.7)
+    plt.plot([], [], color='black', alpha=1, lw=1, label='FDFs')  # for slice label
+
+    # Vertical lines at true RM (phi) of burst(s)
+    num_colors = len(true_RMs)
+    tab = 'tab10' if num_colors<=10 else 'tab20'
+    cmap = plt.colormaps[tab]
+    rm_colors = [cmap(i / num_colors) for i in range(num_colors)]
+    
+    for i,rm in enumerate(true_RMs):
+        plt.axvline(x=rm, label=rf'True $\phi_{i+1}$ = {rm}', color=rm_colors[i], linestyle='--', alpha=0.6)
+
+    # Axes & Labels
+    plt.xlabel(r'$\phi$ [rad/m$^2$]')
+    plt.ylabel('Amplitude')
+    plt.xlim(-700, 700)
+    plt.legend(loc='upper left', bbox_to_anchor=(1.02, 1))
+    plt.ylim(5, 11)
+
+    if save_name is not None:
+        plt.savefig(save_loc + save_name + '.png', dpi=300)
+    plt.close()
+
+
+
+
+
+
+
+
+# FIX BELOW
+
+
+
+def compute_folded_fdf(phi_arr, fdf_arr):
     """
     Compute the folded FDF by summing the positive and negative phi sides of the FDF.
     Returns the folded phi array and folded FDF array.
     """
-    fdf_slice = abs(np.nanmean(fdf_arr[lim_inds[0]:lim_inds[1]+1], axis=0))
-    phi_zero_ind = np.argmin(np.abs(phi_arr))  # index of phi=0 in phi_arr
+
+    fdf_abs = np.abs(fdf_arr)  # take abs of full FDF, shape (Ntime, Nphi)
+    phi_zero_ind = np.argmin(np.abs(phi_arr))  # index closests to phi=0 in phi_arr
+
+    # Positive phi side (includes phi=0)
     folded_phi = phi_arr[phi_zero_ind:]
-    pos_phi_fdf = fdf_slice[phi_zero_ind:]
-    neg_phi_fdf = np.concatenate([[0], np.flip(fdf_slice[:phi_zero_ind])])
+    pos_phi_fdf = fdf_abs[..., phi_zero_ind:]
+
+    # Negative phi side reflected onto positive axis
+    neg_phi_fdf = np.concatenate(
+        [
+            np.zeros(fdf_abs.shape[:-1] + (1,)),  # shape (Ntime, 1) of zeros for phi=0 bin
+            np.flip(fdf_abs[..., :phi_zero_ind], axis=-1)  # flip along phi axis (last axis)
+        ],
+        axis=-1  # concatenate along phi axis
+    )
+
+    # Folded FDF
     folded_fdf = (pos_phi_fdf + neg_phi_fdf)  # using sum
 
-    return folded_phi, pos_phi_fdf, neg_phi_fdf, folded_fdf
+    return folded_phi, folded_fdf, pos_phi_fdf, neg_phi_fdf
 
 
 def get_lim_inds(time_arr, lim_time):
@@ -292,12 +350,13 @@ def plot_folded_fdf_panel(data_dict, param, lim_time=None, ax=None, true_RMs=Non
     tstart, tstop = time_slice_arr[lim_inds[0]], time_slice_arr[lim_inds[1]]
     with open(summary_file, 'a') as f:
         print(f"({label}) {tstart:.2f} - {tstop:.2f} s", file=f)
+    
+    # Average FDF over the time slice corresponding to the burst limits found
+    FDF_arr = np.nanmean(data_dict[param]['FDF_arr'][lim_inds[0]:lim_inds[1]+1], axis=0)  # shape (Nphi,)
 
     # Fold FDF around phi=0 by summing positive and negative phi sides
-    folded_phi, pos_phi_fdf, neg_phi_fdf, folded_fdf = \
-        compute_folded_fdf(data_dict[param]['phi_array'],  # shape (Nphi,)
-                           data_dict[param]['FDF_arr'],  # shape (Ntime_fdf, Nphi) 
-                           lim_inds)
+    folded_phi, folded_fdf, pos_phi_fdf, neg_phi_fdf = \
+        compute_folded_fdf(data_dict[param]['phi_array'], FDF_arr)
 
     # FDF lines
     pos_line, = ax.plot(folded_phi, pos_phi_fdf, lw=1, ls=":", c="k", alpha=0.7, label=f"$+\phi$ range")  # positive phi
@@ -338,14 +397,8 @@ def plot_folded_fdf(data_dict, param_list, param_name='param',
     See plot_folded_fdf_panel for single panel function.
     """
 
-    # Param info
-    Nparams = len(param_list)
-    with open(summary_file, 'a') as f:
-        print(f"Plotting folded FDF panels for {Nparams} values of {param_name}: {param_list}", file=f)
-        print(f"Input time limits: {lim_time}", file=f)
-        print("Actual time limits for folded FDF:", file=f)
-
     # Figure setup
+    Nparams = len(param_list)
     fig, axes = plt.subplots(
         Nparams,
         1,
@@ -356,8 +409,6 @@ def plot_folded_fdf(data_dict, param_list, param_name='param',
     if Nparams == 1:
         axes = [axes]
     cmap = plt.colormaps["tab20b"]
-    if param_name == "timestep":
-        param_name = "Downsampling Factor"
 
     # Plot panels
     for i, p in enumerate(param_list):
@@ -392,42 +443,6 @@ def plot_folded_fdf(data_dict, param_list, param_name='param',
     if save_name is not None and save_loc is not None:
         plt.savefig(save_loc + save_name, dpi=200)
     plt.close()
-
-
-
-def plot_cross_corr_slices(phi_lags, cross_corr_arr, true_RMs=None,
-                           save_name=None, save_loc=None):
-    
-    plt.figure(figsize=(9, 6))
-    plt.title('Cross-Correlation of FDF with RMSF (downsampled by 8)')
-
-   # Downsample & plot data
-    if cross_corr_arr.shape[0] <= 8:
-        print("Warning: Cross-correlation has very few phi bins, downsampling may not be meaningful.")
-    downsampled_cross_corr = downsample_time_mean(cross_corr_arr, factor=8)
-    for i,t_slice in enumerate(downsampled_cross_corr):
-        plt.plot(phi_lags, abs(t_slice), color='k', alpha=0.2, lw=0.7)
-    plt.plot([], [], color='black', alpha=1, lw=1, label='FDFs')  # for slice label
-
-    # Vertical lines at true RM (phi) of burst(s)
-    num_colors = len(true_RMs)
-    tab = 'tab10' if num_colors<=10 else 'tab20'
-    cmap = plt.colormaps[tab]
-    rm_colors = [cmap(i / num_colors) for i in range(num_colors)]
-    
-    for i,rm in enumerate(true_RMs):
-        plt.axvline(x=rm, label=rf'True $\phi_{i+1}$ = {rm}', color=rm_colors[i], linestyle='--', alpha=0.6)
-
-    # Axes & Labels
-    plt.xlabel(r'$\phi$ [rad/m$^2$]')
-    plt.ylabel('Amplitude')
-    plt.xlim(-700, 700)
-    plt.legend(loc='upper left', bbox_to_anchor=(1.02, 1))
-    plt.ylim(5, 11)
-
-    if save_name is not None:
-        plt.savefig(save_loc + save_name, dpi=300)
-    plt.close()
     
 
 
@@ -451,46 +466,65 @@ def get_colors(num_colors):
     return colors_light, colors_dark
 
 
-def plot_time_curves_by_block(param_arr, metadata_dict_list, timings_dict_list,
-                              x_label, fig_title=None, save_name=None, save_loc=None,
-                              plot_total=True, plot_wall=True, plot_ylog=True, convert_tstep=False):
+
+def plot_timings_by_block(param_list, metadata_dict, timings_dict, param_name, param_label,
+                          fig_title=None, plot_type='cpu_elapsed', save_name=None, save_loc=None,
+                          plot_total=True, plot_wall=True, plot_ylog=True, convert_tstep=False):
     """
     Plot timing curves as a function of a tunable parameter for each code block.
     
     Parameters
     ----------
-    dict_list : list of dicts
-        List of info for each run with a different parameter value. Contains a timings dict
-    timing_dicts : list of dict
-        Collection of timing data, one entry per value of the tunable parameter.
-    
+    param_list : list
+        List of values for the varied parameter.
+    metadata_dict : 
+        Dictionary containing info about the data and run parameters. Used for plot title and legend.
+    timings_dict : dict
+        Dictionary containing timing data for each varied parameter and each code block.
         Structure:
-        - Each element of the list corresponds to a single parameter value.
+        - Each element of the dict corresponds to a single parameter value. (e.g., timings_dict[param_value])
         - Each element is a dictionary whose keys are code blocks:
-            'total' (optional), 'load_mask_normalize', 'rmsf_computation',
+            'total' (optional), 'read_and_dedisperse', 'mask_and_normalize', 'rmsf_computation',
             'rm_search', 'cross_correlation'.
         - Each code block maps to another dictionary containing timing metrics:
             'wall_elapsed' : float
                 Wall-clock elapsed time.
             'cpu_elapsed' : float
                 CPU process time.
+            'efficiency' : float
     save_loc : str
         Absolute path where to save the figure.
+    param_name : str
+        Name of the varied parameter (e.g., 'search_downsamp_factor', 'true_dm_pc_cm3') used in result dicts.
+    param_label : str
+        Label for the x-axis corresponding to the varied parameter (e.g., 'Downsampling Factor', 'DM [pc/cm^3]').
+    plot_type : str
+        Type of plot to make (cpu_elapsed or cpu_efficiency). Defaults to 'cpu_elapsed'.
+    convert_tstep : bool
+        Whether to convert the varied parameter from a downsampling factor to time units (e.g., 391 -> 1ms).
+        Only relevant if the varied parameter is the search_downamp_factor.
     """
 
-    # -- Info for plotting --
-    data_info = metadata_dict_list[0]  # using first dict (they all use the same metadata except the varied param)
+    # -- Get info for plotting --
+    # Data info
+    fmin = metadata_dict[param_list[0]]['fmin_MHz']
+    fmax = metadata_dict[param_list[0]]['fmax_MHz']
+    delta_t_total_s = metadata_dict[param_list[0]]['delta_t_total_s']
+
+    # Convert downsampling factor to a time step in ms for x-axis
+    if convert_tstep and param_name=='search_downsamp_factor':
+        param_name = "dt_rm_ms"
+        param_label = "Search Time Step [ms]"
     
-    # Convert search time step to time units
-    if convert_tstep :
-        param_arr = [(d['dt_rm_ms']).to(u.ms).value for d in metadata_dict_list]
-        x_label = "Search Time Step [ms]"
+    # Only plot wall times for time curves, not efficiency
+    elif plot_type == 'cpu_efficiency':
+        plot_wall = False
     
     # Get code block labels and keys for timing dicts
-    block_labels = ['Total', 'Mask RFI & Normalize', 'RMSF', 'RM Search', 'Cross-Correlation']
+    block_labels = ['Total', 'Read & Dedisperse', 'Mask RFI & Normalize', 'Compute RMSF', 'RM Synthesis', 'Cross-Correlation']
     block_labels = block_labels[1:] if not plot_total else block_labels  # remove 'Total'
-    block_keys = list(timings_dict_list[0].keys())[1:] if not plot_total else timings_dict_list[0].keys()
-
+    block_keys = list(timings_dict[param_list[0]].keys())[1:] if not plot_total else timings_dict[param_list[0]].keys()
+    
     # Get colors
     num_colors = len(block_keys)
     colors_light, colors_dark = get_colors(num_colors)
@@ -499,18 +533,20 @@ def plot_time_curves_by_block(param_arr, metadata_dict_list, timings_dict_list,
     fig, ax = plt.subplots(figsize=(8,5))
     fig.suptitle(fig_title)
 
-    # Get and plot data: wall and CPU times
+    # Get and plot data: wall and CPU times OR efficiency
     for i,code_block in enumerate(block_keys):
-        cpu_data = [t_dict[code_block]['cpu_elapsed'] for t_dict in timings_dict_list]
-        ax.plot(param_arr, cpu_data, c=colors_light[i], label=block_labels[i])
+        data = [timings_dict[p][code_block][plot_type] for p in param_list]
+        ax.plot(param_list, data, c=colors_light[i], label=block_labels[i])
         
         if plot_wall:
-            wall_data = [t_dict[code_block]['wall_elapsed'] for t_dict in timings_dict_list]
-            ax.plot(param_arr, wall_data,  c=colors_dark[i], ls=':')
+            wall_data = [timings_dict[p][code_block]['wall_elapsed'] for p in param_list]
+            ax.plot(param_list, wall_data,  c=colors_dark[i], ls=':')
 
     # Axes 
-    ax.set_xlabel(x_label)
-    ax.set_ylabel('Time [s]')
+    ax.set_xlabel(param_label)
+    ax.set_xlim(param_list[0], param_list[-1])
+    ylabel = 'CPU Efficiency' if plot_type=='cpu_efficiency' else 'Time [s]'
+    ax.set_ylabel(ylabel)
     if plot_ylog:
         ax.set_yscale('log')
 
@@ -521,10 +557,13 @@ def plot_time_curves_by_block(param_arr, metadata_dict_list, timings_dict_list,
         for i in range(len(block_keys))
     ]  
     # Line style labels (time type)
-    style_handles = [
-        # Line2D([0], [0], color='black', lw=2, label='CPU Time'),
-        # Line2D([0], [0], color='black', lw=2, linestyle=':', label='Wall Time')
-    ]  
+    if plot_wall:
+        style_handles = [
+            Line2D([0], [0], color='black', lw=2, label='CPU Time'),
+            Line2D([0], [0], color='black', lw=2, linestyle=':', label='Wall Time')
+        ]  
+    else:
+        style_handles = []
     # Combine handles
     all_handles = (block_handles + style_handles)
     
@@ -536,8 +575,7 @@ def plot_time_curves_by_block(param_arr, metadata_dict_list, timings_dict_list,
     
     fig.legend(
         handles=all_handles,
-        title=f"{data_info['fmin']:.1f} - {data_info['fmax']:.1f} MHz, " + 
-                f"{data_info['delta_t_total_s']:.1f} s",
+        title=f"{fmin:.1f} - {fmax:.1f} MHz, " + f"{delta_t_total_s:.1f} s",
         loc='upper left',
         bbox_to_anchor=(legend_x, legend_y),
         frameon=True,
@@ -551,89 +589,7 @@ def plot_time_curves_by_block(param_arr, metadata_dict_list, timings_dict_list,
     plt.close()
 
 
-def plot_efficiency_by_block(param_arr, metadata_dict_list, timings_dict_list, 
-                             x_label, fig_title=None, save_name=None, save_loc=None, 
-                             plot_total=True, plot_ylog=True, convert_tstep=False):
-    """
-    Plot CPU efficiency curves as a function of a tunable parameter for each code block.
-    
-    Parameters
-    ----------
-    dict_list : list of dicts
-        List of info for each run with a different parameter value. Contains a timings dict
-    timing_dicts : list of dict
-        Collection of timing data, one entry per value of the tunable parameter.
-    
-        Structure:
-        - Each element of the list corresponds to a single parameter value.
-        - Each element is a dictionary whose keys are code blocks:
-            'total' (optional), 'load_mask_normalize', 'rmsf_computation',
-            'rm_search', 'cross_correlation'.
-        - Each code block maps to another dictionary containing timing metrics:
-            'wall_elapsed' : float
-                Wall-clock elapsed time.
-            'cpu_elapsed' : float
-                CPU process time.
-    save_loc : str
-        Absolute path where to save the figure.
-    """
-
-    # -- Info for plotting --
-    data_info = metadata_dict_list[0]  # using first dict (they all use the same data)
-    
-    # Convert search time step to time
-    if convert_tstep :
-        param_arr = [(d['dt_rm']).to(u.ms).value for d in metadata_dict_list]
-        x_label = "Search Time Step [ms]"
-        
-    # Get code block labels and keys for timing dicts
-    block_labels = ['Total', 'Mask RFI & Normalize', 'RMSF', 'RM Search', 'Cross-Correlation']
-    block_labels = block_labels[1:] if not plot_total else block_labels  # remove 'Total'
-    block_keys = list(timings_dict_list[0].keys())[1:] if not plot_total else timings_dict_list[0].keys()
-
-    # Get colors
-    num_colors = len(block_keys)
-    colors_light, _ = get_colors(num_colors)
-
-    # -- Plot --
-    fig, ax = plt.subplots(figsize=(8,5))
-    fig.suptitle(fig_title)
-
-    # Get and plot data
-    for i,code_block in enumerate(block_keys):
-        data = [t_dict[code_block]['cpu_efficiency'] for t_dict in timings_dict_list]
-        ax.plot(param_arr, data, c=colors_light[i], label=block_labels[i])
-
-    # Axes
-    ax.set_xlabel(x_label)
-    ax.set_ylabel('CPU Efficiency')
-    if plot_ylog:
-        ax.set_yscale('log')
-
-    # -- Legend --
-    fig.canvas.draw()
-    bbox = ax.get_position()
-    legend_x = bbox.x1 + 0.02
-    legend_y = bbox.y1  # top of graph
-    
-    fig.legend(
-        title=f"{data_info['fmin']:.1f} - {data_info['fmax']:.1f} MHz, " + 
-                f"{data_info['delta_t_total_s']:.1f} s",
-        loc='upper left',
-        bbox_to_anchor=(legend_x, legend_y),
-        frameon=True,
-        handlelength=2.2,
-        labelspacing=0.9
-    )
-
-    # -- Save figure --
-    if save_name is not None and save_loc is not None:
-        plt.savefig(save_loc + save_name, dpi=300)
-    plt.close()
-
-
-
-def get_max_snr(data, phi_arr, time, t_true, rm_true):
+def compute_max_snr_per_burst(data, phi_arr, rm_true, folded=False):
     """
     Compute SNR of peaks in the FDF (or cross-correlation) where the bursts occur.
     SNR at each time is calculated using (peak_signal - baseline) / sigma_noise, where
@@ -655,68 +611,115 @@ def get_max_snr(data, phi_arr, time, t_true, rm_true):
         list of true RMs of bursts. Ordering must match t_true
     """
 
-    snr_max_per_peak = []
+    # Get folded data if folded=True
+    if folded:
+        phi_arr, data, _, _ = compute_folded_fdf(phi_arr, data)
+
+    # indices of expected RMs alogn phi axis
+    rm_inds = [np.argmin(np.abs(phi_arr - rm)) for rm in rm_true]
+
+    # go through each time bin and compute snr at all expected RMs
+    snr_arr = []
+    for fdf_slice in data:
+        fdf = np.abs(fdf_slice)  # abs of FDF for this time bin
+        baseline = np.nanmedian(fdf)  # absolute level 
+        sigma_noise = np.nanmedian(np.abs(fdf - baseline))  # approx of noise std
+
+        snrs = [(fdf[rm_ind] - baseline) / sigma_noise if sigma_noise > 0 else 0 for rm_ind in rm_inds]  # shape (Nbursts,)
+        snr_arr.append(snrs)
     
-    for i,rm in enumerate(rm_true):
-        rm_ind = np.argmin(np.abs(phi_arr - rm))  # index of true RM along phi array
-        mask_start, mask_stop = np.argmin(abs(phi_arr-(rm-125))), np.argmin(abs(phi_arr-(rm+125)))  # phi edges to mask burst
-        t1,t2 = np.argmin(abs(time-(t_true[i]-0.3))), np.argmin(abs(time-(t_true[i]+0.3)))  # time range to compute SNR for this burst
-    
-        print(f"Processing burst with RM = {rm}")
-        print(f"Masking burst along phi between {phi_arr[mask_start]:.3f} and {phi_arr[mask_stop]:.3f}")
-        print(f"Limiting SNR computations between {time[t1]:.3f} and {time[t2]:.3f} s")
-    
-        snr_t = []
-    
-        for t_idx in range(t1,t2):
-            fdf = np.abs(data[t_idx, :])  # abs of FDF for this time bin
-            peak_signal = fdf[rm_ind]  # signal at true rm
-    
-            # mask out region around the signal in phi
-            mask = np.ones_like(fdf, dtype=bool)
-            mask[max(0, mask_start):mask_stop] = False
-            noise = fdf[mask]
-    
-            baseline = np.nanmedian(noise)  # absolute level
-            sigma_noise = np.std(noise)  # std of noise
-    
-            # compute snr
-            snr = (peak_signal - baseline) / sigma_noise
-            snr_t.append(snr)
-    
-        # take max snr over time for this burst
-        max_snr = np.max(snr_t)
-        snr_max_per_peak.append(max_snr)
-        print(f"Max SNR found: {max_snr:.3f}\n")
+    snr_arr = np.array(snr_arr)  # shape (Ntime, Nbursts)
+    snr_max_per_peak = np.max(snr_arr, axis=0)  # shape (Nbursts,)
 
     return snr_max_per_peak
 
 
+# OLD VERSION
+# def get_max_snr(data, phi_arr, time, t_true, rm_true, folded=False, summary_file=None):
+#     """
+#     Compute SNR of peaks in the FDF (or cross-correlation) where the bursts occur.
+#     SNR at each time is calculated using (peak_signal - baseline) / sigma_noise, where
+#     peak_signal is the FDF value at the true rm, baseline is the median of the time slice with
+#     the full peak masked, and sigma noise is the noise std for the given time bin.
+#     The function returns the peak SNR in time for each burst.
 
-def plot_cpu_and_snr(param_arr, snr_arr, metadata_dict_list, timings_dict_list,
-                     save_name="cpu_and_snr", save_loc=None, 
-                     plot_ylog=True, t_true=[], rm_true=[]):
+#     Parameters
+#     ----------
+#     data : np.ndarray
+#         data of shape (Ntime, Nphi)
+#     phi_arr : 
+#         must match the phi axis of data
+#     time : 
+#         must match time axis of data
+#     t_true : list of floats
+#         list of times at which bursts occur
+#     rm_true : list of floats
+#         list of true RMs of bursts. Ordering must match t_true
+#     """
+
+#     # Get folded data if folded=True
+#     if folded:
+#         phi_arr, data, _, _ = compute_folded_fdf(phi_arr, data)
+
+#     # Get S/N of data
+#     snr_max_per_peak = []
+#     for i,rm in enumerate(rm_true):
+#         rm_ind = np.argmin(np.abs(phi_arr - rm))  # index of true RM along phi array
+#         mask_start, mask_stop = np.argmin(abs(phi_arr-(rm-125))), np.argmin(abs(phi_arr-(rm+125)))  # phi edges to mask burst
+#         t1,t2 = np.argmin(abs(time-(t_true[i]-0.3))), np.argmin(abs(time-(t_true[i]+0.3)))  # time range to compute SNR for this burst
     
-    # --- Info ---
-    data_info = metadata_dict_list[0]
-    t_true = data_info["sim_params"]['arrival_times']
-    rm_true = data_info["sim_params"]['rm']
+#         with open(summary_file, 'a') as f:
+#             print(f"Processing burst with RM = {rm}", file=f)
+#             print(f"Masking burst along phi between {phi_arr[mask_start]:.3f} and {phi_arr[mask_stop]:.3f}", file=f)
+#             print(f"Limiting S/N computations between {time[t1]:.3f} and {time[t2]:.3f} s", file=f)
+    
+#         snr_t = []
+#         for t_idx in range(t1,t2):
+#             fdf = np.abs(data[t_idx, :])  # abs of FDF for this time bin
+#             peak_signal = fdf[rm_ind]  # signal at true rm
+    
+#             # mask out region around the signal in phi
+#             mask = np.ones_like(fdf, dtype=bool)
+#             mask[max(0, mask_start):mask_stop] = False  # false if burst region, true otherwise
+#             noise = fdf[mask]
 
+#             baseline = np.nanmedian(noise)  # absolute level
+#             sigma_noise = np.std(noise)  # std of noise
+    
+#             # compute snr
+#             snr = (peak_signal - baseline) / sigma_noise if sigma_noise > 0 else 0
+#             snr_t.append(snr)
+    
+#         # take max snr over time for this burst
+#         max_snr = np.max(snr_t)
+#         snr_max_per_peak.append(max_snr)
+#         print(f"Max SNR found: {max_snr:.3f}\n")
+
+#     return snr_max_per_peak
+
+
+
+def plot_cpu_and_snr(param_list, snr_arr, metadata_dict, timings_dict, rm_true, folded_snr_arr=None,
+                     param_label=None, save_name="cpu_and_snr", save_loc=None, 
+                     plot_ylog=True):
+    
+    # --- Data info ---
+    fmin = metadata_dict[param_list[0]]['fmin_MHz']
+    fmax = metadata_dict[param_list[0]]['fmax_MHz']
+    delta_t_total_s = metadata_dict[param_list[0]]['delta_t_total_s']
+    
     # --- Colors ---
-    rm_colors = ["#592e83", "#9984d4"]
+    rm_colors = ["#592e83", "#9984d4"]  # colors per burst
     cpu_color = "#6a994e"
     
     # --- Figure Setup ---
     fig, ax1 = plt.subplots(figsize=(8,5))
-    fig.suptitle(
-        f"{data_info['fmin']:.1f} - {data_info['fmax']:.1f} MHz, "
-        f"{data_info['delta_t_total_s']:.1f} s", y=0.95
-    )
+    fig.suptitle(rf"{fmin:.1f} - {fmax:.1f} MHz, {delta_t_total_s:.1f} s, $\phi$={rm_true[0]} rad/m$^2$", y=0.95)
     
     # --- Left Axis: CPU Time ---
-    cpu_data = [t_dict['total']['cpu_elapsed'] for t_dict in timings_dict_list]
-    ax1.plot(param_arr, cpu_data, color=cpu_color, label="CPU time")
-    ax1.set_xlabel("Downsampling Factor")
+    cpu_data = [timings_dict[p]['total']['cpu_elapsed'] for p in param_list]
+    ax1.plot(param_list, cpu_data, color=cpu_color, label="CPU time")
+    ax1.set_xlabel(param_label)
     ax1.set_ylabel("CPU Time [s]", color=cpu_color)
     ax1.tick_params(axis='y', labelcolor=cpu_color)
     
@@ -725,14 +728,22 @@ def plot_cpu_and_snr(param_arr, snr_arr, metadata_dict_list, timings_dict_list,
     
     # --- Right Axis: SNR ---
     ax2 = ax1.twinx()
-    for i in range(len(t_true)):
+    for i in range(len(rm_true)):
         ax2.plot(
-            param_arr,
-            snr_arr[:, i],
+            param_list,
+            snr_arr[:, i],  # snr_arr has shape (Nparams, Nbursts)
             color=rm_colors[i],
-            label=rf"$\phi$={rm_true[i]}, t={t_true[i]} s"
+            label=rf"Full FDF"
         )
-    
+        if folded_snr_arr is not None:
+            ax2.plot(
+                param_list,
+                folded_snr_arr[:, i],  # snr_arr has shape (Nparams, Nbursts)
+                color=rm_colors[i],
+                ls=":",
+                label=rf"Folded FDF"
+            )
+            
     ax2.set_ylabel("S/N", color=rm_colors[0])
     ax2.tick_params(axis='y', labelcolor=rm_colors[0])
     

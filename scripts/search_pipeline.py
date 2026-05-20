@@ -33,20 +33,20 @@ parser.add_argument("save_file", type=Path,
 # Optional
 # Source properties
 parser.add_argument(
-    "--true_dm",
+    "--true_dm_pc_cm3",
     type=float,
     default=0.0,
     help='DM value (in pc/cm**3) to use when dedispersing the data read in (default: 0.0).'
 )
 parser.add_argument(
-    "--true_rms",
+    "--true_rms_rad_m2",
     type=float,
     nargs='+',
     default=None,
     help='True RM values for data read in.'
 )
 parser.add_argument(
-    "--delay",
+    "--delay_ns",
     type=float,
     default=0,
     help='Time delay (in ns) to remove from the data read in. Default is 0 (no delay).'
@@ -110,7 +110,7 @@ parser.add_argument(
     help='Threshold for std-based RFI flagging (default: 5.0).'
 )
 parser.add_argument(
-    "--search_time_step", 
+    "--search_downsamp_factor", 
     type=int, 
     default=1, 
     help='Number of time channels to average over during RM search (default: 1).'
@@ -164,9 +164,9 @@ args = parser.parse_args()
 SOURCE_DIR = args.source_dir
 OBS_NIGHT = args.obs_night
 SAVE_FILE = args.save_file
-DM = pb.DispersionMeasure(args.true_dm * u.pc/u.cm**3)
-RM = args.true_rms * u.rad/u.m**2
-DELAY = args.delay * u.ns
+DM = pb.DispersionMeasure(args.true_dm_pc_cm3 * u.pc/u.cm**3)
+RM = args.true_rms_rad_m2 * u.rad/u.m**2
+DELAY = args.delay_ns * u.ns
 
 # Data info
 START_FILE_IND = args.start_file_ind
@@ -182,7 +182,7 @@ PHI_MAX = args.phi_max
 DPHI_SCALING = args.dphi_scaling
 RFI_MEAN_THRESHOLD = args.rfi_mean_threshold
 RFI_STD_THRESHOLD = args.rfi_std_threshold
-SEARCH_TIME_STEP = args.search_time_step
+SEARCH_DOWNSAMP_FACTOR = args.search_downsamp_factor
 
 # Simulation parameters 
 SIM_FLAG = args.sim_flag
@@ -372,8 +372,8 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------
     measure_start("rm_search")
 
-    # Split time array into slices of length SEARCH_TIME_STEP
-    time_slice_arr = time[::SEARCH_TIME_STEP]  # New time array (using start times of each time slice)
+    # Split time array into slices of length SEARCH_DOWNSAMP_FACTOR
+    time_slice_arr = time[::SEARCH_DOWNSAMP_FACTOR]  # New time array (using start times of each time slice)
 
     # Set up arrays for results
     RM_meas_arr = np.zeros(len(time_slice_arr))  # Store peak of FDF for each time slice
@@ -383,7 +383,7 @@ if __name__ == "__main__":
     for i,start_time in enumerate(time_slice_arr):
         # Time slice indices
         t_start_ind = np.argwhere(time==start_time)[0][0]
-        t_stop_ind = t_start_ind + SEARCH_TIME_STEP
+        t_stop_ind = t_start_ind + SEARCH_DOWNSAMP_FACTOR
 
         # Get the spectra (avg over time slice)
         Q_spec_norm, U_spec_norm = get_spectra(stokes_norm_masked[1].T, 
@@ -488,8 +488,8 @@ if __name__ == "__main__":
         'dphi_scaling': DPHI_SCALING,           # phi scaling when getting phi spacing
         'dphi_rad_m2': dphi,                    # dphi = scaling * FWHM
         'fwhm_rmsf_rad_m2': fwhm,               # fwhm of the RMSF in rad/m^2
-        'search_time_step': SEARCH_TIME_STEP,   # number of time *channels* averaged over during RM search
-        'dt_rm_ms': float((SEARCH_TIME_STEP * dt_stokes).value),  # effective time resolution of RM search results in ms
+        'search_downsamp_factor': SEARCH_DOWNSAMP_FACTOR,   # number of time *channels* averaged over during RM search
+        'dt_rm_ms': float((SEARCH_DOWNSAMP_FACTOR * dt_stokes).value),  # effective time resolution of RM search results in ms
 
         # RFI masking
         'rfi_mean_threshold': RFI_MEAN_THRESHOLD,
@@ -569,16 +569,18 @@ if __name__ == "__main__":
         print(f"Time duration          : {time[-1] - time[0]:.3f} s", file=SUMMARY_FILE)
         print(f"Time resolution (dt)   : {dt_stokes:.4f}", file=SUMMARY_FILE)
         print(f"Frequency resolution   : {df_stokes:.4f}", file=SUMMARY_FILE)
+        print(f"Corrected with a delay of {DELAY}", file=SUMMARY_FILE)
+        print(f"Dedispersed with DM of {DM}", file=SUMMARY_FILE)
 
         # RM search info
         print("\n[RM SEARCH]", file=SUMMARY_FILE)
-        print(f"phi_max                : {PHI_MAX:.3f} rad/m^2", file=SUMMARY_FILE)
-        print(f"dphi                   : {dphi:.5f} rad/m^2", file=SUMMARY_FILE)
-        print(f"RMSF FWHM              : {fwhm:.5f} rad/m^2", file=SUMMARY_FILE)
-        print(f"Nphi                   : {len(phi_array)}", file=SUMMARY_FILE)
-        print(f"Search time step       : {SEARCH_TIME_STEP}", file=SUMMARY_FILE)
+        print(f"phi_max                    : {PHI_MAX:.3f} rad/m^2", file=SUMMARY_FILE)
+        print(f"dphi                       : {dphi:.5f} rad/m^2", file=SUMMARY_FILE)
+        print(f"RMSF FWHM                  : {fwhm:.5f} rad/m^2", file=SUMMARY_FILE)
+        print(f"Nphi                       : {len(phi_array)}", file=SUMMARY_FILE)
+        print(f"Search downsampling factor : {SEARCH_DOWNSAMP_FACTOR}", file=SUMMARY_FILE)
         print(f"New Ntime for RM search    : {len(time_slice_arr)}", file=SUMMARY_FILE)
-        print(f"Effective dt for RM search : {dt_stokes * SEARCH_TIME_STEP:.4f}", file=SUMMARY_FILE)
+        print(f"Effective dt for RM search : {dt_stokes * SEARCH_DOWNSAMP_FACTOR:.4f}", file=SUMMARY_FILE)
 
         # RFI info
         print("\n[RFI MASKING]", file=SUMMARY_FILE)

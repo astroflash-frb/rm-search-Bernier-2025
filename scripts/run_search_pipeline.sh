@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-9%5
+#SBATCH --array=0-7%4
 #
 #SBATCH --output=/scratch/abernier/logs/scripts/%j_%a.out
 #SBATCH --mail-user=audreanne.bernier@mail.mcgill.ca
@@ -25,8 +25,8 @@ echo "Environment loaded"
 
 # Set up parameter to vary
 INDEX=${SLURM_ARRAY_TASK_ID}
-STEP_LIST=(1 4 8 16 32 48 64 96 128 192)  #(1 4 8 16 32 48 64 96 128 192 256)  # number of channels
-PARAM_VARY=timestep  # name of param for file/dict names ** doesn't have to match exactly the param variable name
+STEP_LIST=(1 4 8 16 32 48 64 96)  #(1 4 8 16 32 48 64 96 128 192 256)  # number of channels
+PARAM_VARY=search_downsamp_factor
 
 
 # Source info/properties
@@ -34,7 +34,6 @@ SOURCE=2022_CHIME_B2111+46
 SOURCE_DIR=/scratch/abernier/pulsar_data/${SOURCE}
 OBS_NIGHT=20220826T064420Z
 DM=141.26  # pc/cm**3
-# DM=0
 RM=-218.70  # rad/m**2
 DELAY=-2.0  # ns
 
@@ -51,7 +50,7 @@ PHI_MAX=1500
 DPHI_SCALING=0.05
 RFI_MEAN_THRESHOLD=1.7
 RFI_STD_THRESHOLD=1.3
-SEARCH_TIME_STEP=${STEP_LIST[$INDEX]}  # Vary this parameter across array jobs
+SEARCH_DOWNSAMP_FACTOR=${STEP_LIST[$INDEX]}
 
 # Simulation parameters
 SIM_FLAG=0  # Set to 1 to inject simulated bursts, 0 to run without
@@ -62,25 +61,22 @@ SIM_SNR="5 10"  # SNR of simulated bursts to inject (relative to noise in real t
 SIM_RM="-120 500"  # RM of simulated bursts to inject (should be within phi_max)
 
 # Output paths
-STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_start${START_FILE_IND}_delay${DELAY}_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
+STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_start${START_FILE_IND}_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
 OUTDIR=/scratch/abernier/pulsar_data/search_results/${SOURCE}/20220826T064420Z/$(
     [[ $SIM_FLAG -eq 1 ]] && echo "SIM_" || echo ""
 )$(
     [[ $SLICE_BURST_FLAG -eq 1 ]] && echo "sliced_" || echo ""
-)$(
-    [[ $DM -eq 0 ]] && echo "noDM_" || echo ""
 )${STOKES_SETTINGS}/${PARAM_VARY}  # output directory
 mkdir -p "$OUTDIR"  # Create output directory if it doesn't exist
-SAVE_FILE=${OUTDIR}/${PARAM_VARY}${SEARCH_TIME_STEP}.npz  # Final save file
-# Note: SEARCH_TIME_STEP is the variable in the script+saved dict, but using 'timestep' in the filename for clarity
+SAVE_FILE=${OUTDIR}/${PARAM_VARY}_${DM}.npz  # Final save file
 
 
 # Run RM Search
 cd /home/abernier/scratch/rm-search-Bernier-2025/scripts
 echo "search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
-      --true_dm ${DM} \
-      --true_rms ${RM} \
-      --delay ${DELAY} \
+      --true_dm_pc_cm3 ${DM} \
+      --true_rms_rad_m2 ${RM} \
+      --delay_ns ${DELAY} \
       --start_file_ind ${START_FILE_IND} \
       --nfiles ${NFILES} \
       --ref_freq ${REF_FREQ} \
@@ -90,7 +86,7 @@ echo "search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
       --dphi_scaling ${DPHI_SCALING} \
       --rfi_mean_threshold ${RFI_MEAN_THRESHOLD} \
       --rfi_std_threshold ${RFI_STD_THRESHOLD} \
-      --search_time_step ${SEARCH_TIME_STEP} \
+      --search_downsamp_factor ${SEARCH_DOWNSAMP_FACTOR} \
       --sim_flag ${SIM_FLAG} \
       --sim_num_bursts ${SIM_NUM_BURSTS} \
       --sim_arrival_times ${SIM_TIMES} \
@@ -99,9 +95,9 @@ echo "search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
       --sim_rm ${SIM_RM}"
 
 python search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
-      --true_dm ${DM} \
-      --true_rms ${RM} \
-      --delay ${DELAY} \
+      --true_dm_pc_cm3 ${DM} \
+      --true_rms_rad_m2 ${RM} \
+      --delay_ns ${DELAY} \
       --start_file_ind ${START_FILE_IND} \
       --nfiles ${NFILES} \
       --ref_freq ${REF_FREQ} \
@@ -111,7 +107,7 @@ python search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
       --dphi_scaling ${DPHI_SCALING} \
       --rfi_mean_threshold ${RFI_MEAN_THRESHOLD} \
       --rfi_std_threshold ${RFI_STD_THRESHOLD} \
-      --search_time_step ${SEARCH_TIME_STEP} \
+      --search_downsamp_factor ${SEARCH_DOWNSAMP_FACTOR} \
       --sim_flag ${SIM_FLAG} \
       --sim_num_bursts ${SIM_NUM_BURSTS} \
       --sim_arrival_times ${SIM_ARRIVAL_TIMES} \

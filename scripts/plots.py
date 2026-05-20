@@ -22,14 +22,21 @@ parser.add_argument("settings", type=str,
                     help='Specify which Stokes data was used in the search.')
 parser.add_argument("param", type=str, 
                     help='Specify the varied parameter to plot results for.')
+parser.add_argument("--param_label", type=str, default=None,
+                    help='Label for the x-axis corresponding to the varied parameter (e.g., "Downsampling Factor", "DM [pc/cm^3]").')
 parser.add_argument("--burst_lims", nargs='+', type=float, default=None,
                     help='Time limits (in seconds) to average over burst in some plots. Provide as two numbers: --burst_lims tmin tmax')
+parser.add_argument("--data_files_unique", action='store_true',
+                    help='Flag to indicate whether the masked+normalized Stokes data is ' \
+                    'the same for all values of the varied parameter (True) or if it changes ' \
+                    'with each run (False).')
 args = parser.parse_args()
 
 # Info to get search results
 RESULTS_DIR = args.results_dir
 SETTINGS = args.settings
 PARAM = args.param
+PARAM_LABEL = args.param_label if args.param_label is not None else PARAM  # use provided label or default to param name
 PARAM_DIR = f"{RESULTS_DIR}/{SETTINGS}/{PARAM}/"
 BURST_LIMS = args.burst_lims
 if BURST_LIMS == [0]:
@@ -40,8 +47,8 @@ METADATA_FILES = sorted(glob.glob(os.path.join(PARAM_DIR, f"{PARAM}*_metadata.np
 TIMINGS_FILES = sorted(glob.glob(os.path.join(PARAM_DIR, f"{PARAM}*_timings.npz")), key=len)
 DATA_FILES = sorted(glob.glob(os.path.join(PARAM_DIR, f"{PARAM}*_arrays.npz")), key=len)
 NFILES = len(DATA_FILES)  # number of files to plot
-DATA_FILES_UNIQUE = True   # determines if masked+normalized stokes data is the same for all values of the varied params or not
-                           # True if data is unique, false if data changes with each run of param
+DATA_FILES_UNIQUE = args.data_files_unique   # determines if masked+normalized stokes data is the same for all values of the varied params or not
+                                             # True if data is unique, false if data changes with each run of param
 
 # Save directory for figures
 SOURCE_AND_NIGHT = f"{RESULTS_DIR.split('/')[-2]}/{RESULTS_DIR.split('/')[-1]}"
@@ -77,8 +84,8 @@ if __name__ == "__main__":
 
     for data_file, metadata_file, timings_file in zip(DATA_FILES, METADATA_FILES, TIMINGS_FILES):
         # Get parameter value from filename
-        filename = os.path.basename(data_file).split('_')
-        param_value = int(filename[0].split(f"{PARAM}")[1]) 
+        filename = os.path.basename(data_file)  # format: param_name_{param_value}_arrays.npz
+        param_value = float(filename.split("_")[-2]) 
         param_list.append(param_value)
 
         # Load data
@@ -93,6 +100,9 @@ if __name__ == "__main__":
         # Load timings
         with np.load(timings_file, allow_pickle=True) as tf:
             timings[param_value] = tf['timings'][0]
+    
+    param_list = sorted(param_list)  # sort parameter values in ascending order (just in case)
+                                     # DATA_FILES is only sorted by length so eg. 141.26 gets put above 200
 
     
     # Print info to summary file
@@ -139,8 +149,8 @@ if __name__ == "__main__":
             label_stokes = 'stokes_data'
             label_rmsf = 'RMSF'
         else:
-            label_stokes = f'stokes_data_{PARAM}{p}'
-            label_rmsf = f'RMSF_{PARAM}{p}'
+            label_stokes = f'stokes_data_{PARAM}_{p}'
+            label_rmsf = f'RMSF_{PARAM}_{p}'
             
         # Plot masked + normalized Stokes data
         stokes_norm_masked = data[p]['full_stokes']  # shape (Nstokes, Ntimes, Nfreqs)
@@ -159,14 +169,17 @@ if __name__ == "__main__":
             break
 
     
-    # Plot FDF and cross-correlation results
-    # ------------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
     # Get true RMs (using 1st file)
-    rm_true = list(metadata[param_list[0]]['true_rms_rad_m2'].value)  # true RM of real data *Quantity array*
+    rm_true = list(metadata[param_list[0]]['true_rms_rad_m2'].value)  # true RM of real data
     if metadata[param_list[0]]['sim_flag']:
         sim_rm = metadata[param_list[0]]['sim_params']["rm"]  # true RM of injected bursts
         rm_true.append(sim_rm.value)
+    rm_true = np.array(rm_true)  # shape (Ntrue_rms,)
 
+    
+    # Plot FDF and cross-correlation results
+    # ------------------------------------------------------------------------------
     for p in param_list:
         # Get arrays to plot
         FDF_arr = data[p]['FDF_arr']  # shape (Ntime_fdf, Nphi)
@@ -175,68 +188,97 @@ if __name__ == "__main__":
         cross_corr_arr = data[p]['cross_corr_arr']  # shape (Ntime_fdf, Nphi_lags)
         phi_lags = data[p]['phi_lags']  # shape (Nphi_lags,)
 
-        # FDF
+        # FDF - imshow
         plot_2panels(FDF_arr, time_slice_arr, phi_array, 
                      cbar_label='Amplitude', suptitle='FDF', 
-                     save_name=f'FDF_{PARAM}{p}', save_loc=SAVE_FIG_DIR)
+                     save_name=f'FDF_{PARAM}_{p}', save_loc=SAVE_FIG_DIR)
         
-
-        # Folded FDF plot - SINGLE PANEL
-        # plot_folded_fdf_panel(data, p, lim_time=BURST_LIMS, xmax=500, true_RMs=rm_true, 
-        #                       save_name=f'FDF_folded_{PARAM}{p}', save_loc=SAVE_FIG_DIR)
-        
-        # Cross-correlation
+        # Cross-correlation - imshow
         plot_2panels(cross_corr_arr, time_slice_arr, phi_lags, ylim=(-1500,1500),
                      cbar_label='Amplitude', suptitle='Cross-correlation',
-                     save_name=f'crosscorr_{PARAM}{p}', save_loc=SAVE_FIG_DIR)
+                     save_name=f'crosscorr_{PARAM}_{p}', save_loc=SAVE_FIG_DIR)
     
-        # Cross-correlation slices plot
+        # Cross-correlation - slices plot
         plot_cross_corr_slices(phi_lags, cross_corr_arr, 
                                true_RMs=rm_true,
-                               save_name=f'crosscorr_slices_{PARAM}{p}',
+                               save_name=f'crosscorr_slices_{PARAM}_{p}',
                                save_loc=SAVE_FIG_DIR
                                )
         
-    
+
     # Folded FDF plot - MULTIPLE PANELS (for different values of varied param)
     # ------------------------------------------------------------------------------
-    plot_folded_fdf(data, param_list, param_name=PARAM, summary_file=summary_file,
-                    lim_time=BURST_LIMS, true_RMs=rm_true, xmax=500,
-                    save_name=f"FDF_folded_allpanels", save_loc=SAVE_FIG_DIR)
+    # with open(summary_file, 'a') as f:
+    #         print(f"Plotting folded FDF panels for {len(param_list)} values of {PARAM}: {param_list}", file=f)
+
+    # # Plot using burst time limits (if given)
+    # if BURST_LIMS is not None:
+    #     with open(summary_file, "a") as SUMMARY_FILE:
+    #         print(f"Input time limits: {BURST_LIMS}", file=SUMMARY_FILE)
+    #         print("Actual time limits for folded FDF:", file=SUMMARY_FILE)
         
+    #     plot_folded_fdf(data, param_list, param_name=PARAM, summary_file=summary_file,
+    #                     lim_time=BURST_LIMS, true_RMs=rm_true, xmax=500,
+    #                     save_name=f"FDF_folded_allpanels_burstlims", save_loc=SAVE_FIG_DIR)
+        
+    # # Plot using full time range (no limits)
+    # with open(summary_file, "a") as SUMMARY_FILE:
+    #     print("Plotting folded FDF panels with no time limits (i.e. using full FDF time range for folding).", file=SUMMARY_FILE)
     
-    exit(0)
+    # plot_folded_fdf(data, param_list, param_name=PARAM, summary_file=summary_file,
+    #                 lim_time=None, true_RMs=rm_true, xmax=500,
+    #                 save_name=f"FDF_folded_allpanels", save_loc=SAVE_FIG_DIR)
 
 
 
     # Time Curves
     # ------------------------------------------------------------------------------
     # wall & cpu times vs param, grouped by block
-    plot_time_curves_by_block(param_list, metadata_dict_list, timings_dict_list, 'Downsampling Factor', 
-                              fig_title=None, save_name='timecurves', save_loc=SAVE_FIG_DIR,
-                              plot_total=True, plot_wall=False, plot_ylog=True, convert_tstep=False)
+    plot_timings_by_block(param_list, metadata, timings, param_name=PARAM, param_label=PARAM_LABEL,
+                          fig_title=None, plot_type='cpu_elapsed', save_name='timecurves', save_loc=SAVE_FIG_DIR,
+                          plot_total=True, plot_wall=False, plot_ylog=True, convert_tstep=False)
     
     # cpu efficiency vs param, grouped by code block 
-    plot_efficiency_by_block(param_list, metadata_dict_list, timings_dict_list, 'Downsampling Factor', 
-                             fig_title=None, save_name='efficiency', save_loc=SAVE_FIG_DIR,
-                             plot_total=True, plot_ylog=False, convert_tstep=False)
+    plot_timings_by_block(param_list, metadata, timings, param_name=PARAM, param_label=PARAM_LABEL,
+                          fig_title=None, plot_type='cpu_efficiency', save_name='efficiency', save_loc=SAVE_FIG_DIR,
+                          plot_total=True, plot_ylog=False, convert_tstep=False)
     
-    # SNR for FDF
-    print(f"Downsampling factors: {param_list}\n")
-    snr_arr = [
-        get_max_snr(
-            data = FDF_arr[i],  # shape (Ntime, Nphi)
-            phi_arr = phi_array[i],  # shape (Nphi,)
-            time = time_slice_arr[i],  # shape (Ntime,)
-            t_true = [2,6],
-            rm_true = RM_TRUE
-        ) 
-        for i in range(NFILES)
-    ]
-    fdf_snr_arr = np.array(snr_arr)   # shape [Nparams, Nbursts]
 
-    # **only getting true rm from sim burst metadata
-    plot_cpu_and_snr(param_arr=param_list, snr_arr = fdf_snr_arr,
-                     metadata_dict_list=metadata_dict_list,
-                     timings_dict_list=timings_dict_list, 
-                     save_loc=SAVE_FIG_DIR)
+    # Get SNR arrays
+    # ------------------------------------------------------------------------------
+
+    # SNR for FDF
+    # fdf_snr_arr = [
+    #     compute_max_snr_per_burst(
+    #         data = data[p]['FDF_arr'],  # shape (Ntime, Nphi), 
+    #         phi_arr = data[p]['phi_array'],  # shape (Nphi,)
+    #         rm_true = rm_true
+    #     )
+    #     for p in param_list
+    # ]
+    # fdf_snr_arr = np.array(fdf_snr_arr)   # shape [Nparams, Nbursts]
+
+    # SNR for folded FDF (using burst time limits)
+    # snr_folded_arr = None
+    # if BURST_LIMS is not None:
+    #     snr_folded_arr = [
+    #         compute_max_snr_per_burst(
+    #             data = data[p]['FDF_arr'],  # shape (Ntime, Nphi)
+    #             phi_arr = data[p]['phi_array'],  # shape (Nphi,)
+    #             rm_true = abs(rm_true),
+    #             folded=True
+    #         ) 
+    #         for p in param_list
+    #     ]
+    #     snr_folded_arr = np.array(snr_folded_arr)   # shape [Nparams, Nbursts]
+
+
+
+    # Plot CPU and S/N
+    # plot_cpu_and_snr(param_list=param_list, metadata_dict=metadata, timings_dict=timings, 
+    #                  snr_arr=fdf_snr_arr, folded_snr_arr=snr_folded_arr,
+    #                  rm_true=rm_true,
+    #                  param_label=PARAM_LABEL, 
+    #                  save_name="cpu_and_snr",
+    #                  save_loc=SAVE_FIG_DIR
+    #                 )
