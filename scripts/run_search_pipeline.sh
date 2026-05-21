@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-7%4
+#SBATCH --array=0-8%3
 #
 #SBATCH --output=/scratch/abernier/logs/scripts/%j_%a.out
 #SBATCH --mail-user=audreanne.bernier@mail.mcgill.ca
@@ -25,8 +25,14 @@ echo "Environment loaded"
 
 # Set up parameter to vary
 INDEX=${SLURM_ARRAY_TASK_ID}
-STEP_LIST=(1 4 8 16 32 48 64 96)  #(1 4 8 16 32 48 64 96 128 192 256)  # number of channels
-PARAM_VARY=search_downsamp_factor
+STEP_LIST=(-2.5 -2.0 -1.5 -1.0 0.0 1.0 1.5 2.0 2.5)  #(1 4 8 16 32 48 64 96 128 192 256)  # number of channels
+PARAM_VARY=delay_ns
+# Things to update when changing the parameter to vary:
+# 1) Update the STEP_LIST with the desired values of the parameter to vary 
+# 2) update PARAM_VARY with the name of the parameter being varied (e.g. "search_downsamp_factor")
+# 3) update the correct parameter variable below to use ${STEP_LIST[$INDEX]}
+# 4) update the parameter variable/value in SAVE_FILE after PARAM_VARY
+# 5) if changing the number of parameters, update the array job range above
 
 
 # Source info/properties
@@ -35,7 +41,7 @@ SOURCE_DIR=/scratch/abernier/pulsar_data/${SOURCE}
 OBS_NIGHT=20220826T064420Z
 DM=141.26  # pc/cm**3
 RM=-218.70  # rad/m**2
-DELAY=-2.0  # ns
+DELAY=${STEP_LIST[$INDEX]}  # ns
 
 # Data parameters
 START_FILE_IND=160
@@ -50,7 +56,7 @@ PHI_MAX=1500
 DPHI_SCALING=0.05
 RFI_MEAN_THRESHOLD=1.7
 RFI_STD_THRESHOLD=1.3
-SEARCH_DOWNSAMP_FACTOR=${STEP_LIST[$INDEX]}
+SEARCH_DOWNSAMP_FACTOR=1
 
 # Simulation parameters
 SIM_FLAG=0  # Set to 1 to inject simulated bursts, 0 to run without
@@ -68,7 +74,7 @@ OUTDIR=/scratch/abernier/pulsar_data/search_results/${SOURCE}/20220826T064420Z/$
     [[ $SLICE_BURST_FLAG -eq 1 ]] && echo "sliced_" || echo ""
 )${STOKES_SETTINGS}/${PARAM_VARY}  # output directory
 mkdir -p "$OUTDIR"  # Create output directory if it doesn't exist
-SAVE_FILE=${OUTDIR}/${PARAM_VARY}_${DM}.npz  # Final save file
+SAVE_FILE=${OUTDIR}/${PARAM_VARY}_${DELAY}.npz  # Final save file  ** CHANGE TO INCLUDE CORRECT PARAMETER VALUE IN FILENAME
 
 
 # Run RM Search

@@ -26,10 +26,10 @@ parser.add_argument("--param_label", type=str, default=None,
                     help='Label for the x-axis corresponding to the varied parameter (e.g., "Downsampling Factor", "DM [pc/cm^3]").')
 parser.add_argument("--burst_lims", nargs='+', type=float, default=None,
                     help='Time limits (in seconds) to average over burst in some plots. Provide as two numbers: --burst_lims tmin tmax')
-parser.add_argument("--data_files_unique", action='store_true',
+parser.add_argument("--data_files_unique", type=int, default=1,
                     help='Flag to indicate whether the masked+normalized Stokes data is ' \
-                    'the same for all values of the varied parameter (True) or if it changes ' \
-                    'with each run (False).')
+                    'the same for all values of the varied parameter (1) or if it changes ' \
+                    'with each run (0).')
 args = parser.parse_args()
 
 # Info to get search results
@@ -75,7 +75,7 @@ with open(summary_file, "w") as SUMMARY_FILE:
 
 
 if __name__ == "__main__":
-    # Open Results
+    # Open Results from Files
     # ------------------------------------------------------------------------------
     param_list = []
     data = {}
@@ -141,7 +141,7 @@ if __name__ == "__main__":
         print("\n[PLOTS]", file=SUMMARY_FILE)
 
 
-    # Plot Data
+    # Plot Stokes & RMSF
     # ------------------------------------------------------------------------------
     for i,p in enumerate(param_list):
         # Get file labels
@@ -169,6 +169,7 @@ if __name__ == "__main__":
             break
 
     
+    # True RMs
     # -----------------------------------------------------------------------------
     # Get true RMs (using 1st file)
     rm_true = list(metadata[param_list[0]]['true_rms_rad_m2'].value)  # true RM of real data
@@ -206,6 +207,20 @@ if __name__ == "__main__":
                                )
         
 
+    # Time Curves
+    # ------------------------------------------------------------------------------
+    # wall & cpu times vs param, grouped by block
+    plot_timings_by_block(param_list, metadata, timings, param_name=PARAM, param_label=PARAM_LABEL,
+                          fig_title=None, plot_type='cpu_elapsed', save_name='timecurves', save_loc=SAVE_FIG_DIR,
+                          plot_total=True, plot_wall=False, plot_ylog=True, convert_tstep=False)
+    
+    # cpu efficiency vs param, grouped by code block 
+    plot_timings_by_block(param_list, metadata, timings, param_name=PARAM, param_label=PARAM_LABEL,
+                          fig_title=None, plot_type='cpu_efficiency', save_name='efficiency', save_loc=SAVE_FIG_DIR,
+                          plot_total=True, plot_ylog=False, convert_tstep=False)
+
+
+
     # Folded FDF plot - MULTIPLE PANELS (for different values of varied param)
     # ------------------------------------------------------------------------------
     # with open(summary_file, 'a') as f:
@@ -229,19 +244,6 @@ if __name__ == "__main__":
     #                 lim_time=None, true_RMs=rm_true, xmax=500,
     #                 save_name=f"FDF_folded_allpanels", save_loc=SAVE_FIG_DIR)
 
-
-
-    # Time Curves
-    # ------------------------------------------------------------------------------
-    # wall & cpu times vs param, grouped by block
-    plot_timings_by_block(param_list, metadata, timings, param_name=PARAM, param_label=PARAM_LABEL,
-                          fig_title=None, plot_type='cpu_elapsed', save_name='timecurves', save_loc=SAVE_FIG_DIR,
-                          plot_total=True, plot_wall=False, plot_ylog=True, convert_tstep=False)
-    
-    # cpu efficiency vs param, grouped by code block 
-    plot_timings_by_block(param_list, metadata, timings, param_name=PARAM, param_label=PARAM_LABEL,
-                          fig_title=None, plot_type='cpu_efficiency', save_name='efficiency', save_loc=SAVE_FIG_DIR,
-                          plot_total=True, plot_ylog=False, convert_tstep=False)
     
 
     # Get SNR arrays

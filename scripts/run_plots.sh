@@ -24,16 +24,18 @@ SOURCE=2022_CHIME_B2111+46
 OBS_NIGHT=20220826T064420Z
 RESULTS_DIR=/scratch/abernier/pulsar_data/search_results/${SOURCE}/${OBS_NIGHT}
 SETTINGS=timeavg391_nfiles65_start160_RFI1.7mean1.3std
-PARAM=true_dm_pc_cm3  # Specify which parameter was varied in the search results to plot
-PARAM_LABEL="DM [pc/cm^3]"  # Label for the x-axis corresponding to the varied parameter (e.g., 'Downsampling Factor', 'DM [pc/cm^3]')
-BURST_LIMS="1.10 1.15"  # to slice around burst for plots
+PARAM=delay_ns  # Specify which parameter was varied in the search results to plot
+PARAM_LABEL="Delay [ns]"  # Label for the x-axis corresponding to the varied parameter (e.g., 'Downsampling Factor', 'DM [pc/cm^3]')
+BURST_LIMS="1.10 1.15"  # burst limits in time for S/N plots
+DATA_FILES_UNIQUE=0  # 1 to plot stokes only once, 0 to plot stokes for each param value 
 
 # Run plotting script
 cd /home/abernier/scratch/rm-search-Bernier-2025/scripts
 echo "plots.py ${RESULTS_DIR} ${SETTINGS} ${PARAM} \
       --param_label \"${PARAM_LABEL}\" \
-      --burst_lims ${BURST_LIMS}"
+      --burst_lims ${BURST_LIMS} \
+      --data_files_unique ${DATA_FILES_UNIQUE}"
 python plots.py ${RESULTS_DIR} ${SETTINGS} ${PARAM} \
       --param_label "${PARAM_LABEL}" \
-      --burst_lims ${BURST_LIMS} #\
-      #--data_files_unique
+      --burst_lims ${BURST_LIMS} \
+      --data_files_unique ${DATA_FILES_UNIQUE}
