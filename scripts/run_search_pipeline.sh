@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=rm_search
 #SBATCH --account=def-istairs
-#SBATCH --time=00:30:00
+#SBATCH --time=05:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-8%3
+#SBATCH --array=0-29%5
 #
 #SBATCH --output=/scratch/abernier/logs/scripts/%j_%a.out
 #SBATCH --mail-user=audreanne.bernier@mail.mcgill.ca
@@ -25,8 +25,10 @@ echo "Environment loaded"
 
 # Set up parameter to vary
 INDEX=${SLURM_ARRAY_TASK_ID}
-STEP_LIST=(-2.5 -2.0 -1.5 -1.0 0.0 1.0 1.5 2.0 2.5)  #(1 4 8 16 32 48 64 96 128 192 256)  # number of channels
-PARAM_VARY=delay_ns
+STEP_LIST=(160  460  760 1060 1360 1660 1960 2260 2560 2860 3160 \
+           3460 3760 4060 4360 4660 4960 5260 5560 5860 6160 6460 \
+           6760 7060 7360 7660 7960 8260 8560 8860)  #(1 4 8 16 32 48 64 96 128 192 256)  # number of channels
+PARAM_VARY=start_file_ind  # name of parameter being varied (e.g. "search_downsamp_factor")
 # Things to update when changing the parameter to vary:
 # 1) Update the STEP_LIST with the desired values of the parameter to vary 
 # 2) update PARAM_VARY with the name of the parameter being varied (e.g. "search_downsamp_factor")
@@ -41,11 +43,11 @@ SOURCE_DIR=/scratch/abernier/pulsar_data/${SOURCE}
 OBS_NIGHT=20220826T064420Z
 DM=141.26  # pc/cm**3
 RM=-218.70  # rad/m**2
-DELAY=${STEP_LIST[$INDEX]}  # ns
+DELAY=-2.0  # ns
 
 # Data parameters
-START_FILE_IND=160
-NFILES=65
+START_FILE_IND=${STEP_LIST[$INDEX]}
+NFILES=300
 REF_FREQ=600  # MHz
 NPIXELS_TO_AVG=391  # number of pixels to average together in time when reading in the data (391 = 1ms time resolution)
                     # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
@@ -67,15 +69,15 @@ SIM_SNR="5 10"  # SNR of simulated bursts to inject (relative to noise in real t
 SIM_RM="-120 500"  # RM of simulated bursts to inject (should be within phi_max)
 
 # Output paths
-STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_start${START_FILE_IND}_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
+#STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_start${START_FILE_IND}_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
+STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_allfiles_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
 OUTDIR=/scratch/abernier/pulsar_data/search_results/${SOURCE}/20220826T064420Z/$(
     [[ $SIM_FLAG -eq 1 ]] && echo "SIM_" || echo ""
 )$(
     [[ $SLICE_BURST_FLAG -eq 1 ]] && echo "sliced_" || echo ""
 )${STOKES_SETTINGS}/${PARAM_VARY}  # output directory
 mkdir -p "$OUTDIR"  # Create output directory if it doesn't exist
-SAVE_FILE=${OUTDIR}/${PARAM_VARY}_${DELAY}.npz  # Final save file  ** CHANGE TO INCLUDE CORRECT PARAMETER VALUE IN FILENAME
-
+SAVE_FILE=${OUTDIR}/${PARAM_VARY}_${START_FILE_IND}.npz  # Final save file  ** CHANGE TO INCLUDE CORRECT PARAMETER VALUE IN FILENAME
 
 # Run RM Search
 cd /home/abernier/scratch/rm-search-Bernier-2025/scripts

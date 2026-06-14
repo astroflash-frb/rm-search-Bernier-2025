@@ -11,6 +11,7 @@ import cmcrameri.cm as cmc
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 import matplotlib.gridspec as gridspec
+from scipy.signal import find_peaks
 
 
 # Default plot parameters
@@ -120,7 +121,7 @@ def plot_stokes(data_array, freq, time, t_unit='s', suptitle='',
 
     # --- Save Figure --
     if save_name is not None and save_loc is not None:
-        plt.savefig(save_loc + save_name + ".pdf", dpi=300)
+        plt.savefig(save_loc + save_name + ".pdf", dpi=200)
     plt.close()
     
 
@@ -141,7 +142,7 @@ def plot_rmsf(phi_array, RMSF, RMSF_full, save_loc=None, save_name='RMSF'):
     plt.close()
 
 
-def downsample_time_mean(data, factor):
+def downsample_time_mean(data, time, factor):
     """
     Downsample data along the time axis by some factor (number of time bins per group)
     """
@@ -149,16 +150,138 @@ def downsample_time_mean(data, factor):
     Ntime = data.shape[0]
     Ntime_trimmed = (Ntime // factor) * factor
     trimmed_data = data[:Ntime_trimmed]
+    trimmed_time = time[:Ntime_trimmed]
 
     # Group consecutive time samples into bins of size 'factor'
     # New shape: (Ngroups, factor, Nphi)
     grouped_data = trimmed_data.reshape(-1, factor, data.shape[1])
+    grouped_time = trimmed_time.reshape(-1, factor)
 
     # Average within each group (collapse the 'factor' axis)
     downsampled_data = grouped_data.mean(axis=1)
+    downsampled_time = grouped_time.mean(axis=1)
     
-    return downsampled_data
+    return downsampled_data, downsampled_time
+
+
+def separate_pulses(detections, time_tol):
+    """
+    Helper function to separate peak detections into distinct bursts.
+    """
+
+    bursts = []  # list of dicts: 1 element = 1 burst, dicts = all peaks found within burst
+    burst_start_time = None
+    current_burst = []
+
+    for det in detections: # go through detected peaks
+        if burst_start_time is None:
+            burst_start_time = det["time"]
+            current_burst = [det]
+            continue
+
+        dt = (det["time"] - burst_start_time) * u.s  # how far are we from the start of this pulse?
+        if dt <= time_tol:  # still in same burst
+            current_burst.append(det)  # append peaks to current burst info
+        else:  # new burst! 
+            bursts.append(current_burst)
+            burst_start_time = det["time"]  # update start time
+            current_burst = [det]  # start new burst
+
+    # make sure we add last burst to list of bursts
+    if len(current_burst):
+        bursts.append(current_burst)
     
+    return bursts
+
+
+def plot_pulses(bursts, fdf, phi_arr, rm_true, save_name=None, save_loc=None):
+    """
+    Plot FDF slices with detected peaks for each burst, along with vertical lines at the true RM of the burst.
+    """
+
+    for i in range(len(bursts)):
+        burst = bursts[i]
+        plt.figure(figsize=(8,4), dpi=150)
+        plt.title(f"{burst[0]['time']:.2f} - {burst[-1]['time']:.2f} s")
+        plt.ylabel("S/N of FDF Amplitude")
+        plt.xlabel(r'$\phi$ [rad/m$^2$]')
+
+        # plot all slices with peaks detected
+        for det in burst:
+            t_ind = det["t_ind"]
+            peaks = det["peaks"]
+            fdf_line, = plt.plot(phi_arr, np.abs(fdf[t_ind]), c='k', lw=0.8, alpha=0.7, zorder=1)
+            peak_marker = plt.scatter(phi_arr[peaks], np.abs(fdf[t_ind])[peaks], c='red', s=10, zorder=3)
+            median_line = plt.axhline(y=det["median"], c='lightblue', ls='--', alpha=0.9, lw=1, zorder=3)
+
+        # rm and median lines
+        rm_line = plt.axvline(x=rm_true, c='orange', ls='-.', alpha=0.9, lw=1, zorder=2)
+        neg_rm_line = plt.axvline(x=-rm_true, c='orange', ls=':', alpha=0.9, lw=1, zorder=2)
+
+        # legend
+        plt.legend(
+            handles=[fdf_line, peak_marker, median_line, rm_line, neg_rm_line], 
+            labels=['Data', 'Detected peaks', 'Median', 'True RM', '-RM'],
+            loc="upper right")
+        
+        plt.xlim(np.min(phi_arr), np.max(phi_arr))
+
+        # save figure
+        if save_name is not None and save_loc is not None:
+            plt.savefig(save_loc + save_name + f"_{burst[0]['time']:.2f}.png", dpi=150)
+        plt.close()
+
+
+def find_pulses(param, fdf, phi_arr, time_arr, downsamp_factor, time_tol, 
+                snr_cutoff=10, rm_true=None, save_loc=None):
+    """
+    Find peaks in the FDF as a function of time, and separate them into distinct bursts based on a time tolerance.
+    """
+
+    # Mask out phi values between -10 and 10 rad/m^2 to avoid peak detection near RM=0
+    phi_mask = np.abs(phi_arr) > 10 # exclude phi values between -10 and 10
+    fdf.copy()[:,~phi_mask] = np.nan
+
+    # Downsample FDF along time axis
+    downsampled_fdf, downsampled_time = downsample_time_mean(
+        fdf,
+        time_arr,
+        downsamp_factor
+    )
+
+    # Find peaks
+    detections = []
+    for t_ind, fdf_slice in enumerate(downsampled_fdf):
+        fdf_slice = abs(fdf_slice) # (Nphi,)
+        median = np.nanmedian(fdf_slice, axis=0)
+        sigma = np.nanstd(fdf_slice, axis=0)    
+        snr_slice = np.divide(  # to avoid /0
+            fdf_slice - median,  # (fdf-median) / std
+            sigma,
+            out=np.zeros_like(fdf_slice),
+            where=(sigma != 0) & ~np.isnan(fdf_slice)
+        )  # shape (Nphi,)
+        
+        peaks, properties = find_peaks(snr_slice, prominence=snr_cutoff)
+
+        if len(peaks) == 0:  # no peaks above S/N cutoff for this time slice
+            continue
+
+        detections.append({  # if detections -> append results
+            't_ind': t_ind,
+            'time': downsampled_time[t_ind],
+            'peaks': peaks,
+            'median': median,
+            # 'properties': properties,
+        })
+    
+    # Separate detections into individual pulses based on time_tol + plot them
+    bursts = separate_pulses(detections, time_tol)
+    plot_pulses(bursts, downsampled_fdf, phi_arr, rm_true, 
+                save_name=f"param{param:.0f}", save_loc=save_loc)
+
+    return bursts
+
 
 def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='',
                  ax1_type='peak', ax2_ylabel=r'$\phi$ [rad/m$^2$]', t_unit='s',
@@ -219,7 +342,7 @@ def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='',
         ax2.set_ylim(ylim)
 
     # AX3: downsampled slices (along time axis)
-    downsampled_data = downsample_time_mean(data, factor=downsamp_factor)
+    downsampled_data, _ = downsample_time_mean(data, time, factor=downsamp_factor)
     for d in downsampled_data:
         ax3.plot(abs(d), phi, color='k', alpha=0.1, lw=0.7)
     # ax3.set_xlabel('avg')
@@ -245,7 +368,7 @@ def plot_cross_corr_slices(phi_lags, cross_corr_arr, true_RMs=None,
    # Downsample & plot data
     if cross_corr_arr.shape[0] <= 8:
         print("Warning: Cross-correlation has very few phi bins, downsampling may not be meaningful.")
-    downsampled_cross_corr = downsample_time_mean(cross_corr_arr, factor=8)
+    downsampled_cross_corr, _ = downsample_time_mean(cross_corr_arr, time, factor=8)
     for i,t_slice in enumerate(downsampled_cross_corr):
         plt.plot(phi_lags, abs(t_slice), color='k', alpha=0.2, lw=0.7)
     plt.plot([], [], color='black', alpha=1, lw=1, label='FDFs')  # for slice label
@@ -270,180 +393,6 @@ def plot_cross_corr_slices(phi_lags, cross_corr_arr, true_RMs=None,
         plt.savefig(save_loc + save_name + '.png', dpi=300)
     plt.close()
 
-
-
-
-
-
-
-
-# FIX BELOW
-
-
-
-def compute_folded_fdf(phi_arr, fdf_arr):
-    """
-    Compute the folded FDF by summing the positive and negative phi sides of the FDF.
-    Returns the folded phi array and folded FDF array.
-    """
-
-    fdf_abs = np.abs(fdf_arr)  # take abs of full FDF, shape (Ntime, Nphi)
-    phi_zero_ind = np.argmin(np.abs(phi_arr))  # index closests to phi=0 in phi_arr
-
-    # Positive phi side (includes phi=0)
-    folded_phi = phi_arr[phi_zero_ind:]
-    pos_phi_fdf = fdf_abs[..., phi_zero_ind:]
-
-    # Negative phi side reflected onto positive axis
-    neg_phi_fdf = np.concatenate(
-        [
-            np.zeros(fdf_abs.shape[:-1] + (1,)),  # shape (Ntime, 1) of zeros for phi=0 bin
-            np.flip(fdf_abs[..., :phi_zero_ind], axis=-1)  # flip along phi axis (last axis)
-        ],
-        axis=-1  # concatenate along phi axis
-    )
-
-    # Folded FDF
-    folded_fdf = (pos_phi_fdf + neg_phi_fdf)  # using sum
-
-    return folded_phi, folded_fdf, pos_phi_fdf, neg_phi_fdf
-
-
-def get_lim_inds(time_arr, lim_time):
-    """
-    Get the indices corresponding to the time limits of the burst.
-    """
-    default_inds = [0, len(time_arr)-1]
-    if lim_time is None:
-        return default_inds
-
-    inds = [
-        np.argmin(np.abs(time_arr - lim_time[0])),
-        np.argmin(np.abs(time_arr - lim_time[1]))
-    ]
-
-    # If slice is empty, use full time range and print warning
-    if inds[0] == inds[1]:
-        print(
-            "Warning: Burst limits map to the same time index. "
-            "Using full time range for folded FDF."
-        )
-        # return default_inds
-        return [inds[0]-1, inds[0]+1]  # take one bin on either side to ensure non-empty slice
-
-    return inds
-
-
-def plot_folded_fdf_panel(data_dict, param, lim_time=None, ax=None, true_RMs=None, xmax=None,
-                          color="rebeccapurple", label="Sum", show_labels=True,
-                          save_name=None, save_loc=None, summary_file=None):
-    """
-    Plot a folded FDF panel onto an axis.
-    """
-    # Create figure and axis if not provided
-    if ax is None: fig, ax = plt.subplots(figsize=(8, 3))
-    else: fig = ax.figure
-    
-    # Get time slide indices corresponding to burst limits (if provided)
-    time_slice_arr = data_dict[param]['time_slice_arr']  # shape (Ntime_fdf,)
-    lim_inds = get_lim_inds(time_slice_arr, lim_time)
-    tstart, tstop = time_slice_arr[lim_inds[0]], time_slice_arr[lim_inds[1]]
-    with open(summary_file, 'a') as f:
-        print(f"({label}) {tstart:.2f} - {tstop:.2f} s", file=f)
-    
-    # Average FDF over the time slice corresponding to the burst limits found
-    FDF_arr = np.nanmean(data_dict[param]['FDF_arr'][lim_inds[0]:lim_inds[1]+1], axis=0)  # shape (Nphi,)
-
-    # Fold FDF around phi=0 by summing positive and negative phi sides
-    folded_phi, folded_fdf, pos_phi_fdf, neg_phi_fdf = \
-        compute_folded_fdf(data_dict[param]['phi_array'], FDF_arr)
-
-    # FDF lines
-    pos_line, = ax.plot(folded_phi, pos_phi_fdf, lw=1, ls=":", c="k", alpha=0.7, label=f"$+\phi$ range")  # positive phi
-    neg_line, = ax.plot(folded_phi, neg_phi_fdf, lw=1, ls="--", c="k", alpha=0.7, label=f"$-\phi$ range")  # negative phi
-    combined_line, = ax.plot(folded_phi, folded_fdf, lw=1, c=color, label=label)  # sum
-    
-    # True RM lines & highlight region around phi=0
-    if true_RMs is not None:
-        for i,rm in enumerate(true_RMs):
-            ax.axvline(x=abs(rm), label=rf'True $\phi_{i+1}$ = {rm}', c='dodgerblue', linestyle='--', alpha=0.6)
-    ax.axvspan(-10, 10, alpha=0.5, color='lightgrey')
-
-    # Axes & Labels
-    if show_labels:
-        ax.legend(handles=[combined_line, pos_line, neg_line], loc="upper right")
-        fig.supylabel("FDF Amplitude")
-        fig.supxlabel(r'|$\phi$| [rad/m$^2$]')
-    else:
-        ax.legend(title=f"{tstart:.2f} - {tstop:.2f} s", handles=[combined_line], loc="upper right")
-    if xmax is not None:
-        ax.set_xlim(0, xmax)
-
-    # Save figure
-    if save_name is not None and save_loc is not None:
-        plt.tight_layout()
-        plt.savefig(save_loc + save_name, dpi=200)
-        plt.close()
-    
-    return fig, ax, (combined_line, pos_line, neg_line)
-
-
-
-def plot_folded_fdf(data_dict, param_list, param_name='param',
-                    lim_time=None, true_RMs=None, xmax=None, 
-                    save_name=None, save_loc=None, summary_file=None):
-    """
-    Multi-panel folded FDF plot (for different values of a varied parameter). 
-    See plot_folded_fdf_panel for single panel function.
-    """
-
-    # Figure setup
-    Nparams = len(param_list)
-    fig, axes = plt.subplots(
-        Nparams,
-        1,
-        figsize=(8, 2 * Nparams),
-        sharex=True,
-        dpi=200
-    )
-    if Nparams == 1:
-        axes = [axes]
-    cmap = plt.colormaps["tab20b"]
-
-    # Plot panels
-    for i, p in enumerate(param_list):
-        color = cmap(i / Nparams)
-        _, _, lines = plot_folded_fdf_panel(
-            data_dict=data_dict,
-            param=p,
-            lim_time=lim_time,
-            ax=axes[i],
-            true_RMs=true_RMs,
-            xmax=xmax,
-            color=color,
-            label=f"{param_name} = {p}",
-            show_labels=False,
-            # not enabling savefig
-            summary_file=summary_file
-        )
-        _, pos_line, neg_line = lines
-
-    # Legend & labels
-    fig.legend(
-        handles=[pos_line, neg_line],
-        loc="upper center",
-        ncol=2,
-        bbox_to_anchor=(0.5, 1.013)
-    )
-    fig.supylabel("FDF Amplitude")
-    fig.supxlabel(r'|$\phi$| [rad/m$^2$]')
-    
-    # Save figure
-    plt.tight_layout()
-    if save_name is not None and save_loc is not None:
-        plt.savefig(save_loc + save_name, dpi=200)
-    plt.close()
-    
 
 
 def scale_lightness(rgb, scale_l):
@@ -588,183 +537,3 @@ def plot_timings_by_block(param_list, metadata_dict, timings_dict, param_name, p
         plt.savefig(save_loc + save_name, dpi=300)
     plt.close()
 
-
-def compute_max_snr_per_burst(data, phi_arr, rm_true, folded=False):
-    """
-    Compute SNR of peaks in the FDF (or cross-correlation) where the bursts occur.
-    SNR at each time is calculated using (peak_signal - baseline) / sigma_noise, where
-    peak_signal is the FDF value at the true rm, baseline is the median of the time slice with
-    the full peak masked, and sigma noise is the noise std for the given time bin.
-    The function returns the peak SNR in time for each burst.
-
-    Parameters
-    ----------
-    data : np.ndarray
-        data of shape (Ntime, Nphi)
-    phi_arr : 
-        must match the phi axis of data
-    time : 
-        must match time axis of data
-    t_true : list of floats
-        list of times at which bursts occur
-    rm_true : list of floats
-        list of true RMs of bursts. Ordering must match t_true
-    """
-
-    # Get folded data if folded=True
-    if folded:
-        phi_arr, data, _, _ = compute_folded_fdf(phi_arr, data)
-
-    # indices of expected RMs alogn phi axis
-    rm_inds = [np.argmin(np.abs(phi_arr - rm)) for rm in rm_true]
-
-    # go through each time bin and compute snr at all expected RMs
-    snr_arr = []
-    for fdf_slice in data:
-        fdf = np.abs(fdf_slice)  # abs of FDF for this time bin
-        baseline = np.nanmedian(fdf)  # absolute level 
-        sigma_noise = np.nanmedian(np.abs(fdf - baseline))  # approx of noise std
-
-        snrs = [(fdf[rm_ind] - baseline) / sigma_noise if sigma_noise > 0 else 0 for rm_ind in rm_inds]  # shape (Nbursts,)
-        snr_arr.append(snrs)
-    
-    snr_arr = np.array(snr_arr)  # shape (Ntime, Nbursts)
-    snr_max_per_peak = np.max(snr_arr, axis=0)  # shape (Nbursts,)
-
-    return snr_max_per_peak
-
-
-# OLD VERSION
-# def get_max_snr(data, phi_arr, time, t_true, rm_true, folded=False, summary_file=None):
-#     """
-#     Compute SNR of peaks in the FDF (or cross-correlation) where the bursts occur.
-#     SNR at each time is calculated using (peak_signal - baseline) / sigma_noise, where
-#     peak_signal is the FDF value at the true rm, baseline is the median of the time slice with
-#     the full peak masked, and sigma noise is the noise std for the given time bin.
-#     The function returns the peak SNR in time for each burst.
-
-#     Parameters
-#     ----------
-#     data : np.ndarray
-#         data of shape (Ntime, Nphi)
-#     phi_arr : 
-#         must match the phi axis of data
-#     time : 
-#         must match time axis of data
-#     t_true : list of floats
-#         list of times at which bursts occur
-#     rm_true : list of floats
-#         list of true RMs of bursts. Ordering must match t_true
-#     """
-
-#     # Get folded data if folded=True
-#     if folded:
-#         phi_arr, data, _, _ = compute_folded_fdf(phi_arr, data)
-
-#     # Get S/N of data
-#     snr_max_per_peak = []
-#     for i,rm in enumerate(rm_true):
-#         rm_ind = np.argmin(np.abs(phi_arr - rm))  # index of true RM along phi array
-#         mask_start, mask_stop = np.argmin(abs(phi_arr-(rm-125))), np.argmin(abs(phi_arr-(rm+125)))  # phi edges to mask burst
-#         t1,t2 = np.argmin(abs(time-(t_true[i]-0.3))), np.argmin(abs(time-(t_true[i]+0.3)))  # time range to compute SNR for this burst
-    
-#         with open(summary_file, 'a') as f:
-#             print(f"Processing burst with RM = {rm}", file=f)
-#             print(f"Masking burst along phi between {phi_arr[mask_start]:.3f} and {phi_arr[mask_stop]:.3f}", file=f)
-#             print(f"Limiting S/N computations between {time[t1]:.3f} and {time[t2]:.3f} s", file=f)
-    
-#         snr_t = []
-#         for t_idx in range(t1,t2):
-#             fdf = np.abs(data[t_idx, :])  # abs of FDF for this time bin
-#             peak_signal = fdf[rm_ind]  # signal at true rm
-    
-#             # mask out region around the signal in phi
-#             mask = np.ones_like(fdf, dtype=bool)
-#             mask[max(0, mask_start):mask_stop] = False  # false if burst region, true otherwise
-#             noise = fdf[mask]
-
-#             baseline = np.nanmedian(noise)  # absolute level
-#             sigma_noise = np.std(noise)  # std of noise
-    
-#             # compute snr
-#             snr = (peak_signal - baseline) / sigma_noise if sigma_noise > 0 else 0
-#             snr_t.append(snr)
-    
-#         # take max snr over time for this burst
-#         max_snr = np.max(snr_t)
-#         snr_max_per_peak.append(max_snr)
-#         print(f"Max SNR found: {max_snr:.3f}\n")
-
-#     return snr_max_per_peak
-
-
-
-def plot_cpu_and_snr(param_list, snr_arr, metadata_dict, timings_dict, rm_true, folded_snr_arr=None,
-                     param_label=None, save_name="cpu_and_snr", save_loc=None, 
-                     plot_ylog=True):
-    
-    # --- Data info ---
-    fmin = metadata_dict[param_list[0]]['fmin_MHz']
-    fmax = metadata_dict[param_list[0]]['fmax_MHz']
-    delta_t_total_s = metadata_dict[param_list[0]]['delta_t_total_s']
-    
-    # --- Colors ---
-    rm_colors = ["#592e83", "#9984d4"]  # colors per burst
-    cpu_color = "#6a994e"
-    
-    # --- Figure Setup ---
-    fig, ax1 = plt.subplots(figsize=(8,5))
-    fig.suptitle(rf"{fmin:.1f} - {fmax:.1f} MHz, {delta_t_total_s:.1f} s, $\phi$={rm_true[0]} rad/m$^2$", y=0.95)
-    
-    # --- Left Axis: CPU Time ---
-    cpu_data = [timings_dict[p]['total']['cpu_elapsed'] for p in param_list]
-    ax1.plot(param_list, cpu_data, color=cpu_color, label="CPU time")
-    ax1.set_xlabel(param_label)
-    ax1.set_ylabel("CPU Time [s]", color=cpu_color)
-    ax1.tick_params(axis='y', labelcolor=cpu_color)
-    
-    if plot_ylog:
-        ax1.set_yscale("log")
-    
-    # --- Right Axis: SNR ---
-    ax2 = ax1.twinx()
-    for i in range(len(rm_true)):
-        ax2.plot(
-            param_list,
-            snr_arr[:, i],  # snr_arr has shape (Nparams, Nbursts)
-            color=rm_colors[i],
-            label=rf"Full FDF"
-        )
-        if folded_snr_arr is not None:
-            ax2.plot(
-                param_list,
-                folded_snr_arr[:, i],  # snr_arr has shape (Nparams, Nbursts)
-                color=rm_colors[i],
-                ls=":",
-                label=rf"Folded FDF"
-            )
-            
-    ax2.set_ylabel("S/N", color=rm_colors[0])
-    ax2.tick_params(axis='y', labelcolor=rm_colors[0])
-    
-    
-    # --- Legend ---
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    
-    ax1.legend(
-        lines1 + lines2,
-        labels1 + labels2,
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.15),
-        ncol=3,
-        frameon=False
-    )
-    
-    plt.subplots_adjust(bottom=0.25)
-    plt.tight_layout()
-    
-    # --- Save Fig ---
-    if save_name is not None:
-        plt.savefig(save_loc + save_name, dpi=300)
-    plt.close()

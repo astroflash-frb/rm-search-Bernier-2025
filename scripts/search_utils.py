@@ -7,6 +7,12 @@ import astropy.units as u
 import baseband_operations as bo
 import pulsarbat as pb
 
+# DEBUGGING
+def print_mem(msg):
+    import psutil, os
+    rss = psutil.Process(os.getpid()).memory_info().rss / 1024**3
+    print(f"{msg}: {rss:.1f} GB")
+
 
 def read_stokes(source_dir, obs_night, start_frame, number_of_frames, dm, ref_freq, n_pixels_to_avg):
     # Reshape and open the files for all frequencies (for chosen obs night) into readers
@@ -15,12 +21,16 @@ def read_stokes(source_dir, obs_night, start_frame, number_of_frames, dm, ref_fr
 
     # Get a specific amount of data (in time) from the readers (Nframes, Nfreq, Npol)
     dual_pol_signal = bo.lazy_read(start_frame, number_of_frames, my_readers)  # DualPolarizationSignal object
+    print_mem("after lazy_read")
     print(f"Read in data with shape (Nframes, Nfreqs, Npols) = {dual_pol_signal.shape}.")
 
     # Dedisperse & get stokes
     dedisp_signal = pb.coherent_dedispersion(dual_pol_signal, dm, ref_freq=ref_freq)
+    print_mem("after dedispersion object")
     stokes_signal = dedisp_signal.to_stokes()
+    print_mem("after to_stokes")
     stokes_signal = stokes_signal.compute()  # FullStokesSignal object
+    print_mem("after compute")
 
     # Get time and frequency arrays
     ntimes = stokes_signal.shape[stokes_signal.get_axis('time')]  # num frames after dedispersion

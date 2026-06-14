@@ -260,6 +260,7 @@ if __name__ == "__main__":
     print(f"Time array shape: {time.shape}, Time range: {time[0]:.3f} - {time[-1]:.3f} s")
     print(f"Frequency array shape: {freq.shape}, Frequency range: {freq[0]:.2f} - {freq[-1]:.2f} MHz")
     measure_stop("read_and_dedisperse")
+    print("Finished reading and dedispersing data.")
  
 
     # Process Data (add sim bursts, mask RFI, normalize)
@@ -326,6 +327,7 @@ if __name__ == "__main__":
         stokes_norm_masked[2], stokes_norm_masked[3] = invert_delay(DELAY, freq, stokes_norm_masked[2], stokes_norm_masked[3])
 
     measure_stop("mask_and_normalize")
+    print("Finished masking RFI and normalizing data.")
 
 
     # RMSF
@@ -366,6 +368,7 @@ if __name__ == "__main__":
     RMSF_full = K_full * np.sum(W_full * b, 1)  # sum along lambda axis & normalize
 
     measure_stop("rmsf_computation")
+    print("Finished computing RMSF.")
 
 
     # RM Search
@@ -400,6 +403,7 @@ if __name__ == "__main__":
                                                 )
     
     measure_stop("rm_search")
+    print("RM search complete.")
         
     
     # Cross-Correlation
@@ -423,6 +427,7 @@ if __name__ == "__main__":
     phi_lags = channel_lags * dphi
 
     measure_stop("cross_correlation")
+    print("Cross-correlation complete.")
     
 
 
@@ -430,6 +435,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------
     # Stop total timing
     measure_stop("total")
+    print("pipeline complete. Saving results...")
 
     # Define output paths
     summary_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_summary.txt")
