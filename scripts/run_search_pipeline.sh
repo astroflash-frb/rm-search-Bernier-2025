@@ -6,7 +6,6 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --array=0-29%5
-#
 #SBATCH --output=/scratch/abernier/logs/scripts/%j_%a.out
 #SBATCH --mail-user=audreanne.bernier@mail.mcgill.ca
 #SBATCH --mail-type=ALL
@@ -25,7 +24,7 @@ echo "Environment loaded"
 
 # Set up parameter to vary
 INDEX=${SLURM_ARRAY_TASK_ID}
-STEP_LIST=(160  460  760 1060 1360 1660 1960 2260 2560 2860 3160 \
+STEP_LIST=(160 460 760 1060 1360 1660 1960 2260 2560 2860 3160 \
            3460 3760 4060 4360 4660 4960 5260 5560 5860 6160 6460 \
            6760 7060 7360 7660 7960 8260 8560 8860)  #(1 4 8 16 32 48 64 96 128 192 256)  # number of channels
 PARAM_VARY=start_file_ind  # name of parameter being varied (e.g. "search_downsamp_factor")
@@ -71,7 +70,7 @@ SIM_RM="-120 500"  # RM of simulated bursts to inject (should be within phi_max)
 # Output paths
 #STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_start${START_FILE_IND}_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
 STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_allfiles_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
-OUTDIR=/scratch/abernier/pulsar_data/search_results/${SOURCE}/20220826T064420Z/$(
+OUTDIR=/scratch/abernier/results_data/${SOURCE}/20220826T064420Z/$(
     [[ $SIM_FLAG -eq 1 ]] && echo "SIM_" || echo ""
 )$(
     [[ $SLICE_BURST_FLAG -eq 1 ]] && echo "sliced_" || echo ""
