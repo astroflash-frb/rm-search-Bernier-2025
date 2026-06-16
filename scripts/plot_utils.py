@@ -2,12 +2,12 @@
 Functions for plotting Stokes parameters, FDFs, and timing curves.
 """
 
+from pulse_utils import downsample_time_mean
 import numpy as np
 import astropy.units as u
 import colorsys
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
-import cmcrameri.cm as cmc
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 import matplotlib.gridspec as gridspec
@@ -142,146 +142,6 @@ def plot_rmsf(phi_array, RMSF, RMSF_full, save_loc=None, save_name='RMSF'):
     plt.close()
 
 
-def downsample_time_mean(data, time, factor):
-    """
-    Downsample data along the time axis by some factor (number of time bins per group)
-    """
-    # Trim time axis so it's divisible by 'factor'
-    Ntime = data.shape[0]
-    Ntime_trimmed = (Ntime // factor) * factor
-    trimmed_data = data[:Ntime_trimmed]
-    trimmed_time = time[:Ntime_trimmed]
-
-    # Group consecutive time samples into bins of size 'factor'
-    # New shape: (Ngroups, factor, Nphi)
-    grouped_data = trimmed_data.reshape(-1, factor, data.shape[1])
-    grouped_time = trimmed_time.reshape(-1, factor)
-
-    # Average within each group (collapse the 'factor' axis)
-    downsampled_data = grouped_data.mean(axis=1)
-    downsampled_time = grouped_time.mean(axis=1)
-    
-    return downsampled_data, downsampled_time
-
-
-def separate_pulses(detections, time_tol):
-    """
-    Helper function to separate peak detections into distinct bursts.
-    """
-
-    bursts = []  # list of dicts: 1 element = 1 burst, dicts = all peaks found within burst
-    burst_start_time = None
-    current_burst = []
-
-    for det in detections: # go through detected peaks
-        if burst_start_time is None:
-            burst_start_time = det["time"]
-            current_burst = [det]
-            continue
-
-        dt = (det["time"] - burst_start_time) * u.s  # how far are we from the start of this pulse?
-        if dt <= time_tol:  # still in same burst
-            current_burst.append(det)  # append peaks to current burst info
-        else:  # new burst! 
-            bursts.append(current_burst)
-            burst_start_time = det["time"]  # update start time
-            current_burst = [det]  # start new burst
-
-    # make sure we add last burst to list of bursts
-    if len(current_burst):
-        bursts.append(current_burst)
-    
-    return bursts
-
-
-def plot_pulses(bursts, fdf, phi_arr, rm_true, save_name=None, save_loc=None):
-    """
-    Plot FDF slices with detected peaks for each burst, along with vertical lines at the true RM of the burst.
-    """
-
-    for i in range(len(bursts)):
-        burst = bursts[i]
-        plt.figure(figsize=(8,4), dpi=150)
-        plt.title(f"{burst[0]['time']:.2f} - {burst[-1]['time']:.2f} s")
-        plt.ylabel("S/N of FDF Amplitude")
-        plt.xlabel(r'$\phi$ [rad/m$^2$]')
-
-        # plot all slices with peaks detected
-        for det in burst:
-            t_ind = det["t_ind"]
-            peaks = det["peaks"]
-            fdf_line, = plt.plot(phi_arr, np.abs(fdf[t_ind]), c='k', lw=0.8, alpha=0.7, zorder=1)
-            peak_marker = plt.scatter(phi_arr[peaks], np.abs(fdf[t_ind])[peaks], c='red', s=10, zorder=3)
-            median_line = plt.axhline(y=det["median"], c='lightblue', ls='--', alpha=0.9, lw=1, zorder=3)
-
-        # rm and median lines
-        rm_line = plt.axvline(x=rm_true, c='orange', ls='-.', alpha=0.9, lw=1, zorder=2)
-        neg_rm_line = plt.axvline(x=-rm_true, c='orange', ls=':', alpha=0.9, lw=1, zorder=2)
-
-        # legend
-        plt.legend(
-            handles=[fdf_line, peak_marker, median_line, rm_line, neg_rm_line], 
-            labels=['Data', 'Detected peaks', 'Median', 'True RM', '-RM'],
-            loc="upper right")
-        
-        plt.xlim(np.min(phi_arr), np.max(phi_arr))
-
-        # save figure
-        if save_name is not None and save_loc is not None:
-            plt.savefig(save_loc + save_name + f"_{burst[0]['time']:.2f}.png", dpi=150)
-        plt.close()
-
-
-def find_pulses(param, fdf, phi_arr, time_arr, downsamp_factor, time_tol, 
-                snr_cutoff=10, rm_true=None, save_loc=None):
-    """
-    Find peaks in the FDF as a function of time, and separate them into distinct bursts based on a time tolerance.
-    """
-
-    # Mask out phi values between -10 and 10 rad/m^2 to avoid peak detection near RM=0
-    phi_mask = np.abs(phi_arr) > 10 # exclude phi values between -10 and 10
-    fdf.copy()[:,~phi_mask] = np.nan
-
-    # Downsample FDF along time axis
-    downsampled_fdf, downsampled_time = downsample_time_mean(
-        fdf,
-        time_arr,
-        downsamp_factor
-    )
-
-    # Find peaks
-    detections = []
-    for t_ind, fdf_slice in enumerate(downsampled_fdf):
-        fdf_slice = abs(fdf_slice) # (Nphi,)
-        median = np.nanmedian(fdf_slice, axis=0)
-        sigma = np.nanstd(fdf_slice, axis=0)    
-        snr_slice = np.divide(  # to avoid /0
-            fdf_slice - median,  # (fdf-median) / std
-            sigma,
-            out=np.zeros_like(fdf_slice),
-            where=(sigma != 0) & ~np.isnan(fdf_slice)
-        )  # shape (Nphi,)
-        
-        peaks, properties = find_peaks(snr_slice, prominence=snr_cutoff)
-
-        if len(peaks) == 0:  # no peaks above S/N cutoff for this time slice
-            continue
-
-        detections.append({  # if detections -> append results
-            't_ind': t_ind,
-            'time': downsampled_time[t_ind],
-            'peaks': peaks,
-            'median': median,
-            # 'properties': properties,
-        })
-    
-    # Separate detections into individual pulses based on time_tol + plot them
-    bursts = separate_pulses(detections, time_tol)
-    plot_pulses(bursts, downsampled_fdf, phi_arr, rm_true, 
-                save_name=f"param{param:.0f}", save_loc=save_loc)
-
-    return bursts
-
 
 def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='',
                  ax1_type='peak', ax2_ylabel=r'$\phi$ [rad/m$^2$]', t_unit='s',
@@ -359,7 +219,7 @@ def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='',
     plt.close()
 
 
-def plot_cross_corr_slices(phi_lags, cross_corr_arr, true_RMs=None,
+def plot_cross_corr_slices(phi_lags, cross_corr_arr, time, true_RMs=None,
                            save_name=None, save_loc=None):
     
     plt.figure(figsize=(9, 6))

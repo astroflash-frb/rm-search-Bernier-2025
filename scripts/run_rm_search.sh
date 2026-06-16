@@ -36,7 +36,7 @@ PARAM_VARY=start_file_ind  # name of parameter being varied (e.g. "search_downsa
 # 5) if changing the number of parameters, update the array job range above
 
 
-# Source info/properties
+# Source info/properties + input path
 SOURCE=2022_CHIME_B2111+46
 SOURCE_DIR=/scratch/abernier/pulsar_data/${SOURCE}
 OBS_NIGHT=20220826T064420Z
@@ -49,7 +49,6 @@ START_FILE_IND=${STEP_LIST[$INDEX]}
 NFILES=300
 REF_FREQ=600  # MHz
 NPIXELS_TO_AVG=391  # number of pixels to average together in time when reading in the data (391 = 1ms time resolution)
-                    # [391, 781, 1563, 3125, 6250, 12500, 25000] for 1ms to 64ms resolution
 SLICE_BURST_FLAG=0  # set to 1 to slice the data around the highest SNR burst, 0 to use the full data read into the array
 
 # RM search parameters
@@ -58,8 +57,9 @@ DPHI_SCALING=0.05
 RFI_MEAN_THRESHOLD=1.7
 RFI_STD_THRESHOLD=1.3
 SEARCH_DOWNSAMP_FACTOR=1
+COMPUTE_CROSS_CORR_FLAG=0
 
-# Simulation parameters
+# Simulated burst parameters
 SIM_FLAG=0  # Set to 1 to inject simulated bursts, 0 to run without
 SIM_NUM_BURSTS=2
 SIM_ARRIVAL_TIMES="2. 6."  # Need to be contained within the time range of the input data
@@ -67,20 +67,16 @@ SIM_BURST_WIDTHS="0.04 0.01"  # Widths of simulated bursts in seconds (or same t
 SIM_SNR="5 10"  # SNR of simulated bursts to inject (relative to noise in real timeseries data)
 SIM_RM="-120 500"  # RM of simulated bursts to inject (should be within phi_max)
 
-# Output paths
-#STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_start${START_FILE_IND}_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
+# Output path
 STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_allfiles_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
-OUTDIR=/scratch/abernier/results_data/${SOURCE}/20220826T064420Z/$(
-    [[ $SIM_FLAG -eq 1 ]] && echo "SIM_" || echo ""
-)$(
-    [[ $SLICE_BURST_FLAG -eq 1 ]] && echo "sliced_" || echo ""
-)${STOKES_SETTINGS}/${PARAM_VARY}  # output directory
+SUBDIR=${PARAM_VARY}_dm141
+OUTDIR=/scratch/abernier/results_data/${SOURCE}/${OBS_NIGHT}/${STOKES_SETTINGS}/${SUBDIR}  # output directory
 mkdir -p "$OUTDIR"  # Create output directory if it doesn't exist
-SAVE_FILE=${OUTDIR}/${PARAM_VARY}_${START_FILE_IND}.npz  # Final save file  ** CHANGE TO INCLUDE CORRECT PARAMETER VALUE IN FILENAME
+SAVE_FILE=${OUTDIR}/${PARAM_VARY}_${START_FILE_IND}.npz  # Final save file
 
 # Run RM Search
-cd /home/abernier/scratch/rm-search-Bernier-2025/scripts
-echo "search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
+cd /home/abernier/scratch/rm-search-Bernier-2025/scripts  # go to script location
+echo "01_rm_search.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
       --true_dm_pc_cm3 ${DM} \
       --true_rms_rad_m2 ${RM} \
       --delay_ns ${DELAY} \
@@ -94,6 +90,7 @@ echo "search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
       --rfi_mean_threshold ${RFI_MEAN_THRESHOLD} \
       --rfi_std_threshold ${RFI_STD_THRESHOLD} \
       --search_downsamp_factor ${SEARCH_DOWNSAMP_FACTOR} \
+      --compute_cross_corr_flag ${COMPUTE_CROSS_CORR_FLAG} \
       --sim_flag ${SIM_FLAG} \
       --sim_num_bursts ${SIM_NUM_BURSTS} \
       --sim_arrival_times ${SIM_TIMES} \
@@ -101,7 +98,7 @@ echo "search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
       --sim_snr ${SIM_SNR} \
       --sim_rm ${SIM_RM}"
 
-python search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
+python 01_rm_search.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
       --true_dm_pc_cm3 ${DM} \
       --true_rms_rad_m2 ${RM} \
       --delay_ns ${DELAY} \
@@ -115,6 +112,7 @@ python search_pipeline.py ${SOURCE_DIR} ${OBS_NIGHT} ${SAVE_FILE}\
       --rfi_mean_threshold ${RFI_MEAN_THRESHOLD} \
       --rfi_std_threshold ${RFI_STD_THRESHOLD} \
       --search_downsamp_factor ${SEARCH_DOWNSAMP_FACTOR} \
+      --compute_cross_corr_flag ${COMPUTE_CROSS_CORR_FLAG} \
       --sim_flag ${SIM_FLAG} \
       --sim_num_bursts ${SIM_NUM_BURSTS} \
       --sim_arrival_times ${SIM_ARRIVAL_TIMES} \

@@ -6,6 +6,7 @@ Script for plotting *all* results of RM search when varying a single parameter.
 # Imports
 # ------------------------------------------------------------------------------
 from plot_utils import *  # contains all plotting functions
+from pulse_utils import *  # contains functions for finding/counting pulses in stokes and FDF
 import numpy as np
 import astropy.units as u
 import glob
@@ -32,8 +33,8 @@ parser.add_argument("tol", type=float,
 
 parser.add_argument("--pulse_search_downsamp_factor", type=int, default=8,
                     help='Downsampling factor to apply to FDF_arr before finding peaks for pulse detection.')
-parser.add_argument("--snr_cutoff", type=float, default=10,
-                    help='S/N cutoff to apply when finding peaks in FDF for pulse detection.')
+parser.add_argument("--prominence_factor", type=float, default=10,
+                    help='Prominence cutoff factor to apply when finding peaks in FDF for pulse detection.')
 parser.add_argument("--param_label", type=str, default=None,
                     help='Label for the x-axis corresponding to the varied parameter (e.g., "Downsampling Factor", "DM [pc/cm^3]").')
 parser.add_argument("--burst_lims", nargs='+', type=float, default=None,
@@ -69,7 +70,7 @@ DATA_FILES_UNIQUE = args.data_files_unique   # determines if masked+normalized s
 SOURCE_P0 = args.source_P0 * u.s  # pulse period
 SOURCE_W50 = args.source_W50 * u.ms  # pulse width (W50)
 PULSE_SEARCH_DOWNSAMP_FACTOR = args.pulse_search_downsamp_factor  # downsampling factor to apply to FDF_arr before finding peaks
-SNR_CUTOFF = args.snr_cutoff  # S/N cutoff to apply when finding peaks in FDF for pulse detection
+PROMINENCE_FACTOR = args.prominence_factor  # Prominence cutoff to apply when finding peaks in FDF for pulse detection
 TOL = args.tol * u.ms  # min distance bw peaks for them to be counted as 2 peaks (in ms)
 
 # Save directory for figures
@@ -79,6 +80,8 @@ os.makedirs(os.path.dirname(SAVE_FIG_DIR), exist_ok=True)
 SAVE_BURST_DIR = SAVE_FIG_DIR + f'/burst_detected_downsamp{PULSE_SEARCH_DOWNSAMP_FACTOR}_tol{TOL.value}/'  # subdirectory for burst detection plots
 os.makedirs(SAVE_BURST_DIR, exist_ok=True)
 os.makedirs(SAVE_FIG_DIR+'/FDFs/', exist_ok=True)  # subdirectory for fdf plots
+os.makedirs(SAVE_FIG_DIR+'/stokes/', exist_ok=True)  # subdirectory for stokes plots
+os.makedirs(SAVE_FIG_DIR+'/visible_stokesI/', exist_ok=True)  # subdirectory for stokes I plots with visible pulses marked
 SUMMARY_FILE = f"{RESULTS_DIR}/{SETTINGS}/{PARAM}_plot_summary_downsamp{PULSE_SEARCH_DOWNSAMP_FACTOR}_tol{TOL.value}.txt"
 
 
@@ -169,8 +172,7 @@ if __name__ == "__main__":
         print(f"Pulse period (P0) : {SOURCE_P0}", file=summary_file)
         print(f"Pulse width (W50) : {SOURCE_W50}", file=summary_file)
         print(f'Tolerance to differentiate pulses: {TOL}', file=summary_file)
-        print(f'S/N cutoff        : {SNR_CUTOFF}', file=summary_file)
-
+        print(f'Prominence cutoff : {PROMINENCE_FACTOR}', file=summary_file)
 
 
     # Plot Stokes & RMSF
@@ -190,7 +192,7 @@ if __name__ == "__main__":
             freq = data[p]['freq']  # shape (Nfreqs,)
             time = data[p]['time']  # shape (Ntimes,)
             plot_stokes(stokes_norm_masked, freq=freq, time=time, cbar_lim_max=None,
-                        t_unit='s', save_name=label_stokes, save_loc=SAVE_FIG_DIR)
+                        t_unit='s', save_name=label_stokes, save_loc=SAVE_FIG_DIR+'/stokes/')
 
             # Plot RMSF
             # RMSF = data[p]['RMSF']  # shape (Nphi,)
@@ -201,18 +203,19 @@ if __name__ == "__main__":
             if DATA_FILES_UNIQUE:  # if data is the same for all runs, only plot once
                 break
 
-    
-    # Count number of expected & visible pulses
-    num_bursts_visible = 0
-
-
 
     # Find pulses + Plot FDF and cross-correlation results
     # ------------------------------------------------------------------------------
-    num_pulses_detected = 0
-    num_bursts_expected_tot = 0
+    # Setup counters to keep track of pulse detection stats across all runs
+    num_pulses_detected_tot = 0  # through FDF
+    num_pulses_visible_tot = 0  # estimated through stokes I
+    num_pulses_found_notvisible_tot = 0  # pulses found in FDF that don't appear visible in stokes I 
+    total_time_length = 0  # total time length of all data read (to estimate total number of expected pulses across all runs)
+
     for p in param_list:
-        # Get arrays to plot
+        # -- Get data arrays --
+        stokes_arr = data[p]['full_stokes']  # shape (Nstokes, Ntimes, Nfreqs)
+        time_arr = data[p]['time']  # shape (Ntimes,)
         FDF_arr = data[p]['FDF_arr']  # shape (Ntime_fdf, Nphi)
         time_slice_arr = data[p]['time_slice_arr']  # shape (Ntime_fdf,)
         dt_fdf = metadata[p]['dt_rm_ms']  # time resolution of FDF_arr
@@ -221,32 +224,39 @@ if __name__ == "__main__":
         cross_corr_arr = data[p]['cross_corr_arr']  # shape (Ntime_fdf, Nphi_lags)
         phi_lags = data[p]['phi_lags']  # shape (Nphi_lags,)
 
-        # Find pulses in FDF (& plot them)
-        bursts = find_pulses(p, FDF_arr, phi_array, time_slice_arr, rm_true=rm_true,
-                             downsamp_factor=PULSE_SEARCH_DOWNSAMP_FACTOR, 
-                             time_tol=TOL, snr_cutoff=SNR_CUTOFF,
-                             save_loc=SAVE_BURST_DIR
-                             )
-        num_pulses_detected += len(bursts)
-        num_pulses_expected = int(time_length / SOURCE_P0)  # num of expected pulses in data read
-        num_bursts_expected_tot += num_pulses_expected
-        
-        # Add pulse detection info to data dict for this param value
-        # data[p]['bursts'] = np.array(bursts, dtype=object)  # add bursts to data dict for this param value
-        # data[p]['num_bursts_detected'] = len(bursts)  # store number of bursts found for this param value
-        # data[p]['pulse_search_downsamp_factor'] = PULSE_SEARCH_DOWNSAMP_FACTOR  # store downsamp factor used for pulse finding
-        # data[p]['snr_cutoff'] = SNR_CUTOFF  # store S/N cutoff used for pulse finding
-        # data[p]['pulse_separation_tol'] = TOL  # store time tolerance used to separate pulses
-        
-        # Print pulse detection info to summary file
+        # -- Count number of visible pulses (using stokes I) --
+        num_pulses_visible, visible_groups = count_visible_pulses(stokes_arr, 
+                                                                  time_arr, 
+                                                                  max_dist=500,
+                                                                  save_loc=SAVE_FIG_DIR+ '/visible_stokesI/',
+                                                                  save_name=f'vis_{PARAM}_{p}.png'
+                                                                  )  # see fct doc for output format
+        num_pulses_visible_tot += num_pulses_visible
+        total_time_length += time_length
+
+        # -- Find pulses in FDF (& plot them) --
+        detected_bursts = find_pulses(p, FDF_arr, phi_array, time_slice_arr, rm_true=rm_true,
+                                      downsamp_factor=PULSE_SEARCH_DOWNSAMP_FACTOR, 
+                                      time_tol=TOL, prominence_factor=PROMINENCE_FACTOR,
+                                      save_loc=SAVE_BURST_DIR
+                                      )  # see fct doc for output format
+        num_pulses_detected_tot += len(detected_bursts)
+
+        # -- Count how many detected bursts don't appear visible in stokes I --
+        num_found_notvisible = count_found_notvisible(detected_bursts, visible_groups, time_arr)
+        num_pulses_found_notvisible_tot += num_found_notvisible
+
+        # -- Print pulse detection info to summary file --
         with open(SUMMARY_FILE, "a") as summary_file:
             print(f"\nProcessing {PARAM}={p}...", file=summary_file)
             print(f'    Downsampling to {dt_fdf*PULSE_SEARCH_DOWNSAMP_FACTOR:.3f} ms', file=summary_file)
             print(f"    FDF time length: {time_length:.3f}", file=summary_file)
-            print(f"    Expecting ~{num_pulses_expected} pulses in data", file=summary_file)
-            print(f"    Found {len(bursts)} pulse(s)", file=summary_file)
-        
+            print(f"    Expecting ~{int(time_length / SOURCE_P0)} pulses in data", file=summary_file)
+            print(f"    Estimated number of visible pulses in Stokes I: {num_pulses_visible}", file=summary_file)
+            print(f"    Found {len(detected_bursts)} pulse(s) in the FDF", file=summary_file)
+            print(f"    Found {num_found_notvisible} pulse(s) in FDF that don't appear visible in Stokes I", file=summary_file)
 
+        
         if args.plot_fdf:
             # FDF - imshow
             plot_2panels(FDF_arr, time_slice_arr, phi_array, 
@@ -259,15 +269,27 @@ if __name__ == "__main__":
             #              save_name=f'crosscorr_{PARAM}_{p}', save_loc=SAVE_FIG_DIR)
         
             # Cross-correlation - slices plot
-            # plot_cross_corr_slices(phi_lags, cross_corr_arr, 
+            # plot_cross_corr_slices(phi_lags, cross_corr_arr, time,
             #                        true_RMs=rm_true,
             #                        save_name=f'crosscorr_slices_{PARAM}_{p}',
             #                        save_loc=SAVE_FIG_DIR
             #                        )
     
+
+    # Print statistics about pulse detection across all runs to summary file
+    # ------------------------------------------------------------------------------
+    num_bursts_expected_tot = int(total_time_length / SOURCE_P0)  # based on time length of data read and pulse period
+    num_pulses_not_visible_tot = num_bursts_expected_tot - num_pulses_visible_tot  # pulses that appear in FDF but don't appear visible in stokes I
+    
     with open(SUMMARY_FILE, "a") as summary_file:
-        print(f"\nTotal bursts detected across all runs: {total_bursts_detected}", file=summary_file)
-        
+        print("\n[OVERALL PULSE DETECTION SUMMARY]", file=summary_file)
+        print(f"Total number of pulses expected across all runs (based on time length and pulse period): {num_bursts_expected_tot}", file=summary_file)
+        print(f"Total number of visible pulses across all runs (estimated from Stokes I): {num_pulses_visible_tot}", file=summary_file)
+        print(f"Total number of pulses not visible in Stokes I (expected - visible): {num_pulses_not_visible_tot}", file=summary_file)
+        print(f"Total number of pulses detected across all runs (using FDF): {num_pulses_detected_tot}", file=summary_file)
+        print(f"Total number of pulses found in FDF that don't appear visible in Stokes I: {num_pulses_found_notvisible_tot}", file=summary_file)
+
+   
 
     # Time Curves
     # ------------------------------------------------------------------------------

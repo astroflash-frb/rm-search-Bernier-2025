@@ -2,7 +2,7 @@
 Perform an RM search on the given data.
 """
 
-from search_utils import *  # contains all functions related to masking RFI, normalizing, and computing spectra and FDF
+from rm_search_utils import *  # contains all functions related to masking RFI, normalizing, and computing spectra and FDF
 from sim_burst_utils import *  # contains all functions related to generating and injecting simulated bursts
 import argparse
 from time import perf_counter, process_time
@@ -115,6 +115,12 @@ parser.add_argument(
     default=1, 
     help='Number of time channels to average over during RM search (default: 1).'
 )
+parser.add_argument(
+    "--compute_cross_corr_flag",
+    type=int,
+    default=1,
+    help='Set to 1 to compute cross-correlation of FDF with FSF, 0 to skip this step (default: 1).'
+)
 
 # Simulation parameters
 parser.add_argument(
@@ -183,6 +189,7 @@ DPHI_SCALING = args.dphi_scaling
 RFI_MEAN_THRESHOLD = args.rfi_mean_threshold
 RFI_STD_THRESHOLD = args.rfi_std_threshold
 SEARCH_DOWNSAMP_FACTOR = args.search_downsamp_factor
+COMPUTE_CROSS_CORR_FLAG = args.compute_cross_corr_flag
 
 # Simulation parameters 
 SIM_FLAG = args.sim_flag
@@ -409,22 +416,26 @@ if __name__ == "__main__":
     # Cross-Correlation
     # ------------------------------------------------------------------------------
     measure_start("cross_correlation")
+    if COMPUTE_CROSS_CORR_FLAG: 
+        # Define array to hold cross-correlation results (shape: [Ntimes, Nphi])
+        cross_corr_len = 2 * len(phi_array) - 1
+        cross_corr_arr = np.zeros((len(time_slice_arr), cross_corr_len))
 
-    # Define array to hold cross-correlation results (shape: [Ntimes, Nphi])
-    cross_corr_len = 2 * len(phi_array) - 1
-    cross_corr_arr = np.zeros((len(time_slice_arr), cross_corr_len))
+        # Cross-correlate measured FDF with FSF for each time slice
+        for i,t in enumerate(time_slice_arr):
+            # Get absolute value of FDF for the time slice
+            fdf_slice = np.abs(FDF_arr[i])
+            
+            # Cross-correlate with FSF
+            cross_corr_arr[i] = correlate(fdf_slice, np.abs(RMSF), mode='full')
 
-    # Cross-correlate measured FDF with FSF for each time slice
-    for i,t in enumerate(time_slice_arr):
-        # Get absolute value of FDF for the time slice
-        fdf_slice = np.abs(FDF_arr[i])
-        
-        # Cross-correlate with FSF
-        cross_corr_arr[i] = correlate(fdf_slice, np.abs(RMSF), mode='full')
-
-    # Get channel lags and corresponding phi values
-    channel_lags = correlation_lags(len(phi_array), len(phi_array), mode='full')
-    phi_lags = channel_lags * dphi
+        # Get channel lags and corresponding phi values
+        channel_lags = correlation_lags(len(phi_array), len(phi_array), mode='full')
+        phi_lags = channel_lags * dphi
+    
+    else:
+        cross_corr_arr = None
+        phi_lags = None
 
     measure_stop("cross_correlation")
     print("Cross-correlation complete.")
@@ -437,7 +448,7 @@ if __name__ == "__main__":
     measure_stop("total")
     print("pipeline complete. Saving results...")
 
-    # Define output paths
+    # Define output paths (adding suffixes to the main SAVE_FILE path for different outputs)
     summary_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_summary.txt")
     arrays_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_arrays.npz")
     metadata_file = SAVE_FILE.with_name(SAVE_FILE.stem + "_metadata.npz")
@@ -531,8 +542,8 @@ if __name__ == "__main__":
         time_slice_arr=time_slice_arr.astype(np.float32),   # shape (Ntimes_fdf,)
         lambda2_array=lambda2_array.astype(np.float32),     # shape (Nlambda,) = (Nfreq,)
         phi_array=phi_array.astype(np.float32),             # shape (Nphi,)
-        cross_corr_arr=cross_corr_arr.astype(np.float32),   # shape (Ntimes_fdf, Nphi_lags)
-        phi_lags=phi_lags.astype(np.float32)                # shape (Nphi_lags,)
+        cross_corr_arr=cross_corr_arr.astype(np.float32),   # shape (Ntimes_fdf, Nphi_lags) or None
+        phi_lags=phi_lags.astype(np.float32)                # shape (Nphi_lags,) or None
     )
 
     # -- Save metadata --
@@ -587,6 +598,7 @@ if __name__ == "__main__":
         print(f"Search downsampling factor : {SEARCH_DOWNSAMP_FACTOR}", file=SUMMARY_FILE)
         print(f"New Ntime for RM search    : {len(time_slice_arr)}", file=SUMMARY_FILE)
         print(f"Effective dt for RM search : {dt_stokes * SEARCH_DOWNSAMP_FACTOR:.4f}", file=SUMMARY_FILE)
+        print(f"CROSS_CORR_FLAG            : {COMPUTE_CROSS_CORR_FLAG}", file=SUMMARY_FILE)
 
         # RFI info
         print("\n[RFI MASKING]", file=SUMMARY_FILE)
