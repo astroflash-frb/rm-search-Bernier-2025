@@ -25,9 +25,7 @@ plt.rcParams.update({
 })
 
 
-def count_visible_pulses(stokes_arr, time_arr, 
-                         prominence_cutoff=3, height_cutoff=2, max_dist=None,
-                         save_loc=None, save_name=None):
+def count_visible_pulses(stokes_arr, prominence_cutoff=3, height_cutoff=2, max_dist=None):
     """
     Count visible pulses in the Stokes I timeseries by finding peaks above a certain prominence.
 
@@ -35,24 +33,18 @@ def count_visible_pulses(stokes_arr, time_arr,
     ----------
     stokes_arr : np.ndarray
         Array of shape (Nstokes, Ntimes, Nfreqs) containing the Stokes parameters as a function of time and frequency.
-    time_arr : np.ndarray
-        Array of shape (Ntimes,) containing the time values corresponding to the Stokes timeseries.
     prominence_cutoff : float
         Minimum prominence of peaks to be counted as visible pulses.
     height_cutoff : float
         Minimum height of peaks to be counted as visible pulses.
     max_dist : int or None
         Minimum distance (in number of time bins) between peaks to be counted as separate pulses.
-    save_loc : str or None
-        If not None, location to save the plot of the Stokes I timeseries with detected peaks.
-    save_name : str or None
-        If not None, name to save the plot of the Stokes I timeseries with detected peaks.
 
     Returns
     -------
     num_visible_pulses : int
         Number of visible pulses in Stokes I.
-    pulse_groups_idx : list of ints
+    peaks : list of ints
         Each element corresponds to the time index of a visible pulse. 
         **Multiple detections might belong to the same physical pulse (depending on max_dist).
     """
@@ -70,25 +62,6 @@ def count_visible_pulses(stokes_arr, time_arr,
                           height=height_cutoff, 
                           distance=max_dist)  # indices of peaks in time_arr where peaks were detected
     num_visible_pulses = len(peaks)
-
-    # Plot
-    if save_loc is not None:
-        plt.figure(figsize=(7,4))
-
-        # plot snr timeseries as black points
-        plt.scatter(time_arr, snr_timeseries, color='black', s=1, zorder=1) 
-
-        # plot detected peaks as red points
-        for p in peaks:
-            plt.scatter(time_arr[p], snr_timeseries[p], color='red', s=2)
-
-        # Axes
-        plt.xlabel(f'Time [s]')
-        plt.ylabel('Stokes I S/N')
-        plt.xlim(np.min(time_arr), np.max(time_arr))
-
-        plt.savefig(save_loc + save_name, dpi=150)
-        plt.close()
 
     return num_visible_pulses, peaks
 
@@ -183,7 +156,7 @@ def plot_pulses(bursts, fdf, phi_arr, rm_true, save_name=None, save_loc=None):
         plt.close()
 
 
-def find_pulses_fdf(param, fdf, phi_arr, time_arr, downsamp_factor, time_tol, 
+def find_pulses_fdf(fdf, phi_arr, time_arr, downsamp_factor, time_tol, 
                     prominence_factor=10, height=2, rm_true=None, 
                     save_loc=None, save_name=None):
     """
@@ -244,8 +217,9 @@ def find_pulses_fdf(param, fdf, phi_arr, time_arr, downsamp_factor, time_tol,
     
     # Separate detections into individual pulses based on time_tol + plot them
     bursts = separate_pulses(detections, time_tol)
-    plot_pulses(bursts, downsampled_fdf, phi_arr, rm_true, 
-                save_loc=save_loc, save_name=save_name)
+    if save_loc is not None and save_name is not None:
+        plot_pulses(bursts, downsampled_fdf, phi_arr, rm_true, 
+                    save_loc=save_loc, save_name=save_name)
 
     return len(bursts), bursts
 

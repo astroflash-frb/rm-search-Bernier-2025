@@ -542,8 +542,14 @@ if __name__ == "__main__":
         time_slice_arr=time_slice_arr.astype(np.float32),   # shape (Ntimes_fdf,)
         lambda2_array=lambda2_array.astype(np.float32),     # shape (Nlambda,) = (Nfreq,)
         phi_array=phi_array.astype(np.float32),             # shape (Nphi,)
-        cross_corr_arr=cross_corr_arr.astype(np.float32),   # shape (Ntimes_fdf, Nphi_lags) or None
-        phi_lags=phi_lags.astype(np.float32)                # shape (Nphi_lags,) or None
+        cross_corr_arr=(                                    # shape (Ntimes_fdf, Nphi_lags) or None
+            cross_corr_arr.astype(np.float32)
+            if cross_corr_arr is not None else None
+        ),
+        phi_lags=(                                          # shape (Nphi_lags,) or None
+            phi_lags.astype(np.float32)
+            if phi_lags is not None else None
+        )
     )
 
     # -- Save metadata --

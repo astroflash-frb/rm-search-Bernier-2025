@@ -32,6 +32,8 @@ parser.add_argument("--pulse_search_downsamp_factor", type=int, default=8,
                     help='Downsampling factor to apply to FDF_arr before finding peaks for pulse detection.')
 parser.add_argument("--prominence_factor", type=float, default=10,
                     help='Prominence cutoff factor to apply when finding peaks in FDF for pulse detection.')
+parser.add_argument("--plot_detected_pulses", type=int, default=0,
+                    help='Whether to save plots of detected pulses in FDF for each parameter value (1 to save, 0 to not save).')
 args = parser.parse_args()
 
 # Paths
@@ -46,6 +48,9 @@ SOURCE_W50 = args.source_W50 * u.ms  # pulse width (W50)
 PULSE_SEARCH_DOWNSAMP_FACTOR = args.pulse_search_downsamp_factor  # downsampling factor to apply to FDF_arr before finding peaks
 PROMINENCE_FACTOR = args.prominence_factor  # Prominence cutoff to apply when finding peaks in FDF for pulse detection
 TOL = args.tol * u.ms  # min distance bw peaks for them to be counted as 2 peaks (in ms)
+
+# Flags
+PLOT_DETECTED_PULSES = args.plot_detected_pulses 
 
 
 # Get RM search result files
@@ -67,32 +72,36 @@ NFILES = len(DATA_FILES)
 
 # Define output directories and files
 # ==============================================================================
-BURST_VIS_DIR = (           # subdirectory for stokes I timeseries plots with visible pulses marked
-    SAVE_FIG_DIR + "/burst_visible_stokesI/"  
+BURST_VIS_RESULTS = (       # file to save pulses visible in stokes I
+    f"{SAVE_FIG_DIR}/burst_visible_info.npz"
 )
-os.makedirs(BURST_VIS_DIR, exist_ok=True)
 
-BURST_DETECT_DIR = (        # subdirectory for burst detection plots
-    SAVE_FIG_DIR
-    + f"/burst_detected_downsamp"
-      f"{PULSE_SEARCH_DOWNSAMP_FACTOR}"
-      f"_tol{TOL.value:.0f}/"
+if PLOT_DETECTED_PULSES:
+    BURST_DETECT_DIR = (        # subdirectory for burst detection plots
+        SAVE_FIG_DIR
+        + f"/tol{TOL.value:.0f}/burst_detected_downsamp"
+        f"{PULSE_SEARCH_DOWNSAMP_FACTOR}"
+        f"_tol{TOL.value:.0f}/"
+    )
+    os.makedirs(BURST_DETECT_DIR, exist_ok=True)
+else:
+    BURST_DETECT_DIR = None
+
+BURST_DETECT_RESULTS = (    # file to save detected bursts info
+    f"{SAVE_FIG_DIR}/tol{TOL.value:.0f}/burst_detected_info_downsamp"
+    f"{PULSE_SEARCH_DOWNSAMP_FACTOR}"
+    f"_tol{TOL.value:.0f}.npz"
 )
-os.makedirs(BURST_DETECT_DIR, exist_ok=True)
 
 SUMMARY_FILE = (
-    f"{SAVE_FIG_DIR}/"
+    f"{SAVE_FIG_DIR}/tol{TOL.value:.0f}/"
     f"summary_downsamp"
     f"{PULSE_SEARCH_DOWNSAMP_FACTOR}"
     f"_tol{TOL.value:.0f}.txt"
 )
 
-BURST_VIS_RESULTS = (       # file to save pulses visible in stokes I
-    f"{SAVE_FIG_DIR}/burst_visible_info.npz"
-)
 
-
-# Load or initialize burst visibility results
+# Load or initialize visible burst results
 # ==============================================================================
 if os.path.isfile(BURST_VIS_RESULTS):  # if file already exists, read it
     visible_dict = np.load(
@@ -208,6 +217,12 @@ if __name__ == "__main__":
     num_pulses_detected_notvisible_tot = 0  # pulses detected in FDF that don't appear visible in stokes I 
     total_time_length = 0  # total time length of all data read (to estimate total number of expected pulses across all runs)
 
+    # dict to store results related to detected pulses
+    results = {
+        "params": {},  # by parameter results
+        "summary": {}  # overall summary stats across all runs
+    }
+
     for p in param_list:
 
         # ----- Get data arrays -----
@@ -228,9 +243,7 @@ if __name__ == "__main__":
             num_pulses_visible, visible_bursts = count_visible_pulses(
                 stokes_arr, 
                 time_arr, 
-                max_dist=500,  # number of time bins 
-                save_loc=BURST_VIS_DIR,
-                save_name=f'vis_param_{p:.0f}.png'
+                max_dist=500  # number of time bins 
             )
             visible_dict[p] = {
                 'num_pulses_visible': num_pulses_visible,
@@ -247,14 +260,14 @@ if __name__ == "__main__":
         # ----- Find pulses in FDF -----
         # see fct doc for output format
         num_pulses_detected, detected_bursts = find_pulses_fdf(
-            p, FDF_arr, phi_array, time_slice_arr, rm_true=rm_true,
+            FDF_arr, phi_array, time_slice_arr, rm_true=rm_true,
             downsamp_factor=PULSE_SEARCH_DOWNSAMP_FACTOR, 
             time_tol=TOL, 
             prominence_factor=PROMINENCE_FACTOR,
+            height=None,
             save_loc=BURST_DETECT_DIR,
             save_name=f'detect_param_{p:.0f}.png'
         ) 
-        # not saving data to file for now
         num_pulses_detected_tot += num_pulses_detected
 
         # ----- Count how many detected bursts don't appear visible in stokes I -----
@@ -265,7 +278,7 @@ if __name__ == "__main__":
         )
         num_pulses_detected_notvisible_tot += num_detected_notvisible
 
-        # -- Print pulse detection info to summary file --
+        # ----- Print pulse detection info to summary file -----
         with open(SUMMARY_FILE, "a") as summary_file:
             print(f"\nProcessing param={p}...", file=summary_file)
             print(f'    Downsampling to {dt_fdf*PULSE_SEARCH_DOWNSAMP_FACTOR:.3f} ms', file=summary_file)
@@ -283,14 +296,16 @@ if __name__ == "__main__":
                     f"      {start:.3f} s - {end:.3f} s",
                     file=summary_file,
                 )
-    
-    
-    # Save visible pulse info to file
-    # np.savez(BURST_VIS_RESULTS, visible_dict=visible_dict)
-    
+        
+        # ----- Save results for this parameter value -----
+        results["params"][p] = {
+            "detected_bursts": detected_bursts,
+            "notvisible_intervals": notvisible_intervals,
+        }
+
 
     # Print statistics about pulse detection across all runs to summary file
-    # ------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     num_bursts_expected_tot = int(total_time_length / SOURCE_P0)  # based on time length of data read and pulse period
     num_pulses_not_visible_tot = num_bursts_expected_tot - num_pulses_visible_tot  # pulses that appear in FDF but don't appear visible in stokes I
     
@@ -303,3 +318,73 @@ if __name__ == "__main__":
         print(f"Total number of pulses found in FDF that don't appear visible in Stokes I: {num_pulses_detected_notvisible_tot}", file=summary_file)
 
 
+    # Add to results the overall stats across all runs
+    # -----------------------------------------------------------------------------
+    results["summary"] = {
+        "num_bursts_expected_tot": num_bursts_expected_tot,
+        "num_pulses_visible_tot": num_pulses_visible_tot,
+        "num_pulses_not_visible_tot": num_pulses_not_visible_tot,
+        "num_pulses_detected_tot": num_pulses_detected_tot,
+        "num_pulses_detected_notvisible_tot": num_pulses_detected_notvisible_tot,
+    }
+
+
+    # Save to file
+    # --------------------------------------------------------------------------
+    # Visible pulse info (only for first run)
+    if PULSE_SEARCH_DOWNSAMP_FACTOR == 4: 
+        np.savez(BURST_VIS_RESULTS, visible_dict=visible_dict)
+
+    # Detected pulses
+    np.savez(BURST_DETECT_RESULTS, results=results)
+
+
+# RESULTS FORMAT
+# =============================================================================
+
+# results = {
+#     "params": {
+#         p: {
+#          "detected_bursts": [list of detected bursts in FDF for this param value],
+#               keys of inner dict: 't_ind' (time index of FDF slice), 
+#                                   'time' (time of FDF slice), 
+#                                   'peaks' (list of indices of peaks in FDF, along phi axis), 
+#                                   'median' (median value of FDF for this time slice)
+#               Eg. detected_bursts = [  
+#                   [ {'t_ind': 0, 'time': 0.1, 'peaks': [10, 50], 'median': 5}, {'t_ind': 1, 'time': 0.2, 'peaks': [12], 'median': 4} ],  # burst with 2 detections
+#                   [ {'t_ind': 10, 'time': 1.0, 'peaks': [30], 'median': 3} ]   # burst with 1 detection
+#               ]
+#          "notvisible_intervals": [list of intervals of detected bursts that don't appear visible in stokes I for this param value]
+#               Eg. [(start1, end1), (start2, end2), ...]
+#         },
+#        ...
+#    },
+#    "summary": {
+#        "num_bursts_expected_tot": int,  # based on time length of data read and pulse period
+#        "num_pulses_visible_tot": int,  # estimated through stokes I
+#        "num_pulses_not_visible_tot": int,  # expected - visible
+#        "num_pulses_detected_tot": int,  # detected in FDF
+#        "num_pulses_detected_notvisible_tot": int,  # pulses detected in FDF that don't appear visible in stokes I
+#    }
+# }
+
+# Eg. To get all the detections for the nth detected burst for the mth parameter value:
+# param_value = param_list[m]
+# detected_bursts = results["params"][param_value]["detected_bursts"]
+# nth_burst = detected_bursts[n]
+# Each element of nth_burst is a dict with keys: 't_ind', 'time', 'peaks', 'median', 
+# where nth_burst[i]['peaks'] gives the phi indices of the detected peaks
+
+
+# Visible dict format
+# ==============================================================================
+# visible_dict = {
+#     param_value1: {
+#         'num_pulses_visible': int,
+#         'visible_bursts': [list of pulse indices (in time) visible in stokes I for this param value]
+#     },
+#     param_value2: {
+#         ...
+#     }
+#     ...
+# }

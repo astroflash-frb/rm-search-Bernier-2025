@@ -6,6 +6,7 @@ import numpy as np
 import astropy.units as u
 import baseband_operations as bo
 import pulsarbat as pb
+import gc
 
 # DEBUGGING
 def print_mem(msg):
@@ -51,6 +52,13 @@ def read_stokes(source_dir, obs_night, start_frame, number_of_frames, dm, ref_fr
     time = bo.shrink_any_2(time.to(u.s)[:,None], [n_pixels_to_avg,1]).flatten()
     freq = freq.to(u.MHz).value
     final_num_frames = full_stokes.shape[1]
+    print_mem("after downsampling")
+
+    # Clean up memory to make sure we don't have multiple copies of the data in memory at once
+    del stokes_arr
+    del stokes_signal  # ** this uses the most memory (~200G for 35s of data)
+    gc.collect()
+    print_mem("after memory cleanup")
 
     # time info dict to return
     frame_info_dict = {

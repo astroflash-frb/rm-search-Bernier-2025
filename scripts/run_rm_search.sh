@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=rm_search
 #SBATCH --account=def-istairs
-#SBATCH --time=05:00:00
+#SBATCH --time=01:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --array=0-29%5
+#SBATCH --array=0-29%10
 #SBATCH --output=/scratch/abernier/logs/scripts/%j_%a.out
 #SBATCH --mail-user=audreanne.bernier@mail.mcgill.ca
 #SBATCH --mail-type=ALL
@@ -40,7 +40,8 @@ PARAM_VARY=start_file_ind  # name of parameter being varied (e.g. "search_downsa
 SOURCE=2022_CHIME_B2111+46
 SOURCE_DIR=/scratch/abernier/pulsar_data/${SOURCE}
 OBS_NIGHT=20220826T064420Z
-DM=141.26  # pc/cm**3
+# DM=141.26  # pc/cm**3
+DM=135.0
 RM=-218.70  # rad/m**2
 DELAY=-2.0  # ns
 
@@ -69,7 +70,7 @@ SIM_RM="-120 500"  # RM of simulated bursts to inject (should be within phi_max)
 
 # Output path
 STOKES_SETTINGS=timeavg${NPIXELS_TO_AVG}_nfiles${NFILES}_allfiles_RFI${RFI_MEAN_THRESHOLD}mean${RFI_STD_THRESHOLD}std
-SUBDIR=${PARAM_VARY}_dm141
+SUBDIR=${PARAM_VARY}_dm135
 OUTDIR=/scratch/abernier/results_data/${SOURCE}/${OBS_NIGHT}/${STOKES_SETTINGS}/${SUBDIR}  # output directory
 mkdir -p "$OUTDIR"  # Create output directory if it doesn't exist
 SAVE_FILE=${OUTDIR}/${PARAM_VARY}_${START_FILE_IND}.npz  # Final save file
