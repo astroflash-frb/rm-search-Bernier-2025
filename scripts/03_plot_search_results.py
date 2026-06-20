@@ -283,6 +283,6 @@ if __name__ == "__main__":
 
     plt.ylabel("% Detected")
     plt.xlabel("Downsampling Factor")
-    plt.legend(title=f"time_tol = {TOL}", title_fontsize=9, loc="center left", bbox_to_anchor=(1, 0.5))
+    plt.legend(title=f"time_tol = {TOL:.0f}", title_fontsize=9, loc="center left", bbox_to_anchor=(1, 0.5))
     plt.tight_layout()
-    plt.savefig(f"{SAVE_FIG_DIR}/detection_rate_tol{TOL}.png", dpi=150)
+    plt.savefig(f"{SAVE_FIG_DIR}/detection_rate_tol{TOL}.png", dpi=200)

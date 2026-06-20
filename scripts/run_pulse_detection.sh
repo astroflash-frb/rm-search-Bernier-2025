@@ -38,7 +38,7 @@ PLOT_DETECTED_PULSES=1  # whether to save plots of detected pulses in FDF for ea
 
 # Input & output paths (assuming same hierarchy as search script output)
 SETTINGS=timeavg391_nfiles300_allfiles_RFI1.7mean1.3std
-SUBDIR=start_file_ind_dm141
+SUBDIR=start_file_ind_dm135
 RESULTS_DIR=/scratch/abernier/results_data/${SOURCE}/${OBS_NIGHT}/${SETTINGS}/${SUBDIR}  # input
 SAVE_FIG_DIR=/scratch/abernier/results_figures/${SOURCE}/${OBS_NIGHT}/${SETTINGS}/${SUBDIR}   # output
 mkdir -p "$SAVE_FIG_DIR"  # create output directory if it doesn't exist

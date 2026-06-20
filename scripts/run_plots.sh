@@ -29,7 +29,7 @@ OBS_NIGHT=20220826T064420Z
 
 # Input & output paths (assuming same hierarchy as search script output)
 SETTINGS=timeavg391_nfiles300_allfiles_RFI1.7mean1.3std
-SUBDIR=start_file_ind_dm141
+SUBDIR=start_file_ind_dm135
 RESULTS_DIR=/scratch/abernier/results_data/${SOURCE}/${OBS_NIGHT}/${SETTINGS}/${SUBDIR}  # input
 SAVE_FIG_DIR=/scratch/abernier/results_figures/${SOURCE}/${OBS_NIGHT}/${SETTINGS}/${SUBDIR}   # input+output
 mkdir -p "$SAVE_FIG_DIR"  # create output directory if it doesn't exist
@@ -37,7 +37,7 @@ mkdir -p "$SAVE_FIG_DIR"  # create output directory if it doesn't exist
 # Info for plots
 PARAM_LABEL="Start File Index"  # Label for the x-axis corresponding to the varied parameter (e.g., 'Downsampling Factor', 'DM [pc/cm^3]')
 DATA_FILES_UNIQUE=0  # 1 to plot stokes only once, 0 to plot stokes for each param value 
-TOL=100  # tol to plot results for
+TOL=200  # tol to plot results for
 
 
 # Run plotting script

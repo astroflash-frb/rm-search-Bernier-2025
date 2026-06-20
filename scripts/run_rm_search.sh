@@ -41,7 +41,7 @@ SOURCE=2022_CHIME_B2111+46
 SOURCE_DIR=/scratch/abernier/pulsar_data/${SOURCE}
 OBS_NIGHT=20220826T064420Z
 # DM=141.26  # pc/cm**3
-DM=135.0
+DM=145.0
 RM=-218.70  # rad/m**2
 DELAY=-2.0  # ns
 
