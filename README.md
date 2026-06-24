@@ -25,9 +25,9 @@ This step performs the RM search and produces the Faraday Dispersion Function (F
 
 Bash script: `run_rm_search.sh`
 
-Python script: `01_rm_search.py`
+Python script: `scripts/01_rm_search.py`
 
-Functions: `rm_search_utils.py` and `sim_burst_utils.py`
+Functions: `scripts/rm_search_utils.py` and `scripts/sim_burst_utils.py`
 
 
 ### Pulse Detection
@@ -36,9 +36,9 @@ This step identifies and groups significant FDF detections into distinct pulses.
 
 Bash script: `run_pulse_detection.sh`
 
-Python script: `02_pulse_detection.py`
+Python script: `scripts/02_pulse_detection.py`
 
-Functions: `pulse_utils.py`
+Functions: `scripts/pulse_utils.py`
 
 
 ### Plots
@@ -47,9 +47,9 @@ Generates figures and summary plots from the search results.
 
 Bash script: `run_plots.sh`
 
-Python script: `03_plot_search_results.py`
+Python script: `scripts/03_plot_search_results.py`
 
-Functions: `plot_utils.py`
+Functions: `scripts/plot_utils.py`
 
 
 
