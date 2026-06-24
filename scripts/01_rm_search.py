@@ -75,7 +75,7 @@ parser.add_argument(
     "--npixels_to_avg", 
     type=int, 
     default=391, 
-    help='Number of time bins to average over when reading in data (default: 391 = 1 ms).'
+    help='Number of time bins to average over when reading in data and creating Stokes (default: 391 = 1 ms).'
 )
 parser.add_argument(
     "--slice_burst_flag",
@@ -202,7 +202,7 @@ SIM_PARAMS = None  # to be filled with sim params if SIM_FLAG=1
 
 # Other Constants & Globals
 RFI_RANGES = [(529,535), (482,483),(450,450),(452,452),(457,458),(462,467),(470,470),(477,477)]  # in MHz
-TIMINGS = {}
+TIMINGS = {}  # to store timing results for different blocks of code
 _process = psutil.Process(os.getpid())
 
 

@@ -10,7 +10,7 @@
 #SBATCH --mail-user=audreanne.bernier@mail.mcgill.ca
 #SBATCH --mail-type=ALL
 
-# Load modules
+# Load modules on cluster
 cd ~/scratch
 module load StdEnv/2023
 module load python/3.11.5
@@ -30,9 +30,9 @@ STEP_LIST=(160 460 760 1060 1360 1660 1960 2260 2560 2860 3160 \
 PARAM_VARY=start_file_ind  # name of parameter being varied (e.g. "search_downsamp_factor")
 # Things to update when changing the parameter to vary:
 # 1) Update the STEP_LIST with the desired values of the parameter to vary 
-# 2) update PARAM_VARY with the name of the parameter being varied (e.g. "search_downsamp_factor")
+# 2) update PARAM_VARY with the variable name of the parameter being varied (e.g. "search_downsamp_factor")
 # 3) update the correct parameter variable below to use ${STEP_LIST[$INDEX]}
-# 4) update the parameter variable/value in SAVE_FILE after PARAM_VARY
+# 4) update any output path names that use the parameter being varied
 # 5) if changing the number of parameters, update the array job range above
 
 
@@ -58,7 +58,7 @@ DPHI_SCALING=0.05
 RFI_MEAN_THRESHOLD=1.7
 RFI_STD_THRESHOLD=1.3
 SEARCH_DOWNSAMP_FACTOR=1
-COMPUTE_CROSS_CORR_FLAG=0
+COMPUTE_CROSS_CORR_FLAG=0  # 0 to skip computing the cross-correlation of FDF with FSF (saves time and memory when not needed))
 
 # Simulated burst parameters
 SIM_FLAG=0  # Set to 1 to inject simulated bursts, 0 to run without

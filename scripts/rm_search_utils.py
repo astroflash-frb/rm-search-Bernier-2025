@@ -7,10 +7,13 @@ import astropy.units as u
 import baseband_operations as bo
 import pulsarbat as pb
 import gc
+import psutil, os
 
-# DEBUGGING
+
 def print_mem(msg):
-    import psutil, os
+    """
+    To print the current memory usage of the process in GB.
+    """
     rss = psutil.Process(os.getpid()).memory_info().rss / 1024**3
     print(f"{msg}: {rss:.1f} GB")
 
