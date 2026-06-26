@@ -29,7 +29,7 @@ SOURCE_P0=1.014684793189  # pulse period in seconds
 SOURCE_W50=60.5  # pulse width in ms
 
 # Parameters for pulse detection in FDF
-LIST=(2 4 6 8 10 12 14 16)
+LIST=(2 4 6 8 10 12 14 16)  # varying downsampling factor
 INDEX=$((SLURM_ARRAY_TASK_ID))  # index for array job to specify which parameter value to use for this job
 PULSE_SEARCH_DOWNSAMP_FACTOR=${LIST[$INDEX]}  # downsampling factor to apply to FDF_arr before pulse detection
 PROMINENCE_FACTOR=10  # prominence cutoof factor to apply when finding peaks in FDF

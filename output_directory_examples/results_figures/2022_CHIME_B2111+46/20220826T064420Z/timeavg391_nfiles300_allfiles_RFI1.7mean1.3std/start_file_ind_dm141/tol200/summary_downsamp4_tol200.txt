@@ -1,0 +1,394 @@
+================================================================================
+PULSE DETECTION SUMMARY
+================================================================================
+
+[RUN & SOURCE INFO]
+Results directory : ['', 'scratch', 'abernier', 'results_data', '2022_CHIME_B2111+46', '20220826T064420Z']
+Settings          : timeavg391_nfiles300_allfiles_RFI1.7mean1.3std
+Varied parameter  : start_file_ind_dm141
+Number of runs    : 30
+Parameter values  : [160.0, 460.0, 760.0, 1060.0, 1360.0, 1660.0, 1960.0, 2260.0, 2560.0, 2860.0, 3160.0, 3460.0, 3760.0, 4060.0, 4360.0, 4660.0, 4960.0, 5260.0, 5560.0, 5860.0, 6160.0, 6460.0, 6760.0, 7060.0, 7360.0, 7660.0, 7960.0, 8260.0, 8560.0, 8860.0]
+
+[METADATA CONTENTS]
+Stored per-run search settings and results.
+  - source_dir
+  - obs_night
+  - save_file
+  - true_dm_pc_cm3
+  - true_rms_rad_m2
+  - delay_ns
+  - start_file_ind
+  - nfiles
+  - start_frame
+  - number_of_frames
+  - ref_freq_MHz
+  - npixels_to_avg
+  - slice_burst_flag
+  - n_time
+  - n_freq
+  - n_phi
+  - n_time_rm
+  - fmin_MHz
+  - fmax_MHz
+  - df_stokes_MHz
+  - dt_stokes_ms
+  - delta_t_total_s
+  - phi_max_rad_m2
+  - dphi_scaling
+  - dphi_rad_m2
+  - fwhm_rmsf_rad_m2
+  - search_downsamp_factor
+  - dt_rm_ms
+  - rfi_mean_threshold
+  - rfi_std_threshold
+  - num_masked_channels
+  - fraction_masked_channels
+  - sim_flag
+  - sim_params
+  - slurm_info
+
+[TIMING CONTENTS]
+Stored runtime diagnostics for each processing stage.
+  - total
+  - read_and_dedisperse
+  - mask_and_normalize
+  - rmsf_computation
+  - rm_search
+  - cross_correlation
+
+[DATA ARRAYS]
+Example of arrays available:
+  - full_stokes               shape=(4, 35621, 1024)   dtype=float32
+  - time                      shape=(35621,)           dtype=float32
+  - freq                      shape=(1024,)            dtype=float32
+  - rfi_mask                  shape=(1024,)            dtype=bool
+  - RMSF                      shape=(7291,)            dtype=complex64
+  - RMSF_full                 shape=(7291,)            dtype=complex64
+  - FDF_arr                   shape=(35621, 7291)      dtype=complex64
+  - RM_meas_arr               shape=(35621,)           dtype=float32
+  - time_slice_arr            shape=(35621,)           dtype=float32
+  - lambda2_array             shape=(1024,)            dtype=float32
+  - phi_array                 shape=(7291,)            dtype=float32
+  - cross_corr_arr            shape=(35621, 14581)     dtype=float32
+  - phi_lags                  shape=(14581,)           dtype=float32
+
+[PULSE FINDING]
+Pulse period (P0) : 1.014684793189 s
+Pulse width (W50) : 60.5 ms
+Tolerance to differentiate pulses: 200.0 ms
+Prominence cutoff : 10.0
+
+Processing param=160.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 39
+    Found 4 pulse(s) in the FDF
+    Found 0 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+
+Processing param=460.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 28
+    Found 6 pulse(s) in the FDF
+    Found 0 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+
+Processing param=760.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 31
+    Found 6 pulse(s) in the FDF
+    Found 0 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+
+Processing param=1060.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 24
+    Found 14 pulse(s) in the FDF
+    Found 0 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+
+Processing param=1360.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 30
+    Found 18 pulse(s) in the FDF
+    Found 0 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+
+Processing param=1660.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 28
+    Found 18 pulse(s) in the FDF
+    Found 2 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      16.029 s - 16.033 s
+      17.215 s - 17.215 s
+
+Processing param=1960.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 24
+    Found 19 pulse(s) in the FDF
+    Found 2 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      11.105 s - 11.121 s
+      22.283 s - 22.287 s
+
+Processing param=2260.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 22
+    Found 17 pulse(s) in the FDF
+    Found 0 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+
+Processing param=2560.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 21
+    Found 19 pulse(s) in the FDF
+    Found 0 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+
+Processing param=2860.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 24
+    Found 21 pulse(s) in the FDF
+    Found 1 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      25.771 s - 25.779 s
+
+Processing param=3160.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 29
+    Found 29 pulse(s) in the FDF
+    Found 2 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      28.153 s - 28.157 s
+      33.178 s - 33.178 s
+
+Processing param=3460.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 12
+    Found 14 pulse(s) in the FDF
+    Found 1 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      13.927 s - 13.939 s
+
+Processing param=3760.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 19
+    Found 17 pulse(s) in the FDF
+    Found 0 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+
+Processing param=4060.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 25
+    Found 27 pulse(s) in the FDF
+    Found 2 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      11.393 s - 11.393 s
+      31.668 s - 31.684 s
+
+Processing param=4360.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 31
+    Found 33 pulse(s) in the FDF
+    Found 3 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      5.351 s - 5.435 s
+      6.356 s - 6.356 s
+      28.714 s - 28.718 s
+
+Processing param=4660.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 21
+    Found 26 pulse(s) in the FDF
+    Found 5 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      9.659 s - 9.667 s
+      10.676 s - 10.676 s
+      24.786 s - 24.814 s
+      25.727 s - 25.815 s
+      26.700 s - 26.828 s
+
+Processing param=4960.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 22
+    Found 23 pulse(s) in the FDF
+    Found 1 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      28.101 s - 28.101 s
+
+Processing param=5260.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 27
+    Found 30 pulse(s) in the FDF
+    Found 4 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      13.887 s - 13.887 s
+      18.099 s - 18.107 s
+      22.063 s - 22.111 s
+      26.011 s - 26.043 s
+
+Processing param=5560.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 28
+    Found 28 pulse(s) in the FDF
+    Found 2 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      30.231 s - 30.255 s
+      32.469 s - 32.469 s
+
+Processing param=5860.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 19
+    Found 20 pulse(s) in the FDF
+    Found 1 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      20.245 s - 20.273 s
+
+Processing param=6160.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 23
+    Found 24 pulse(s) in the FDF
+    Found 1 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      35.616 s - 35.652 s
+
+Processing param=6460.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 19
+    Found 20 pulse(s) in the FDF
+    Found 2 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      9.411 s - 9.427 s
+      31.925 s - 31.929 s
+
+Processing param=6760.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 27
+    Found 25 pulse(s) in the FDF
+    Found 2 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      0.522 s - 0.527 s
+      29.867 s - 29.887 s
+
+Processing param=7060.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 26
+    Found 25 pulse(s) in the FDF
+    Found 3 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      17.943 s - 17.943 s
+      31.048 s - 31.052 s
+      34.095 s - 34.099 s
+
+Processing param=7360.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 12
+    Found 8 pulse(s) in the FDF
+    Found 0 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+
+Processing param=7660.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 23
+    Found 22 pulse(s) in the FDF
+    Found 1 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      16.133 s - 16.141 s
+
+Processing param=7960.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 27
+    Found 20 pulse(s) in the FDF
+    Found 1 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      35.648 s - 35.652 s
+
+Processing param=8260.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 24
+    Found 18 pulse(s) in the FDF
+    Found 0 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+
+Processing param=8560.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 28
+    Found 15 pulse(s) in the FDF
+    Found 0 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+
+Processing param=8860.0...
+    Downsampling to 4.004 ms
+    FDF time length: 35.654 s
+    Expecting ~35 pulses in data
+    Estimated number of visible pulses in Stokes I: 30
+    Found 19 pulse(s) in the FDF
+    Found 2 pulse(s) in FDF that don't appear visible in Stokes I
+    Intervals of detected pulses that don't appear visible in Stokes I:
+      13.695 s - 13.711 s
+      19.801 s - 19.801 s
+
+[OVERALL PULSE DETECTION SUMMARY]
+Total number of pulses expected across all runs (based on time length and pulse period): 1054
+Total number of visible pulses across all runs (estimated from Stokes I): 743
+Total number of pulses not visible in Stokes I (expected - visible): 311
+Total number of pulses detected across all runs (using FDF): 585
+Total number of pulses found in FDF that don't appear visible in Stokes I: 38

@@ -19,6 +19,39 @@ def print_mem(msg):
 
 
 def read_stokes(source_dir, obs_night, start_frame, number_of_frames, dm, ref_freq, n_pixels_to_avg):
+    """
+    Read in data, dedisperse, and compute Stokes parameters.
+    
+    Parameters
+    ----------
+    source_dir : str
+        Directory containing the CHIME data for the chosen source.
+    obs_night : str
+        Observation night (e.g., 20220826T064420Z).
+    start_frame : int
+        Index of first frame to read.
+    number_of_frames : int
+        Number of frames to read.
+    dm : float
+        Dispersion measure to use for dedispersion (in pc/cm^3).
+    ref_freq : float
+        Reference frequency for dedispersion (in MHz).
+    n_pixels_to_avg : int
+        Number of time bins to average over when reading in data and creating Stokes.
+
+    Returns
+    -------
+    full_stokes : np.ndarray
+        Array of shape (Nstokes, Ntimes, Nfreqs) containing the Stokes parameters (I, Q, U, V).
+    time : np.ndarray
+        Array of time values corresponding to the time axis of full_stokes (shape: [Ntimes,]).
+    freq : np.ndarray
+        Array of frequency values corresponding to the frequency axis of full_stokes (shape: [Nfreqs,]).
+    frame_info_dict : dict
+        Dictionary containing information about the number of frames at different stages of processing.
+        This is used for the summary file.
+    """
+
     # Reshape and open the files for all frequencies (for chosen obs night) into readers
     my_readers = bo.get_chime_readers(source_dir, internal=obs_night)
     total_num_frames = my_readers[0].shape[0]
@@ -75,9 +108,21 @@ def read_stokes(source_dir, obs_night, start_frame, number_of_frames, dm, ref_fr
 
 def flag_rfi_manual(ranges, freqs):
     """
+    Flag frequency channels based on manually specified ranges. Returns a boolean mask.
+
+    Parameters
+    ----------
     ranges : list of tuples
-        list of (start,end) frequencies to mask
+        List of (start,end) frequencies to mask, in MHz. TO mask single channels, use (freq,freq).
+    freqs : array-like
+        Frequency array (shape: [Nfreqs]), in MHz.
+    
+    Returns
+    -------
+    channel_mask_manual : np.ndarray
+        Boolean array of shape (Nfreqs,) where True indicates a flagged (to be masked) frequency channel.
     """
+
     channel_mask_manual = np.full(len(freqs), False)
     
     for (start,end) in ranges:
@@ -107,6 +152,11 @@ def get_rfi_mask(intensity_array, mean_treshhold=2, std_threshold=5, ranges=None
         Threshold for the absolute value of the mean. Channels with |mean| > mean_threshold are flagged.
     std_threshold : float
         Threshold for the standard deviation. Channels with std > std_threshold are flagged.
+    ranges : list of tuples, optional
+        List of (start,end) frequencies to manually mask, in MHz. TO mask single channels, use (freq,freq). 
+        If None, no manual masking is applied.
+    freqs : array-like, optional
+        Frequency array (shape: [Nfreqs]), in MHz. Required if ranges is not None, to determine which channels to mask.
     
     Returns
     -------
@@ -153,7 +203,7 @@ def normalize_data(data_array):
     Returns
     -------
     data_normalized : np.ndarray
-        Normalized array of the same shape
+        Normalized array of the same shape.
     """
     
     mean_per_channel = np.nanmean(data_array, axis=1, keepdims=True)
@@ -199,7 +249,7 @@ def slice_around_burst(full_stokes, time, slice_width=0.1):
 
 def invert_delay(delay, freq, U, V):
     """
-    Invert a delay (e.g. from a burst search) in the Stokes U and V spectra.
+    Invert a delay in the Stokes U and V spectra.
 
     Parameters
     ----------
@@ -209,7 +259,13 @@ def invert_delay(delay, freq, U, V):
         The frequency array (in MHz or with frequency units).
     U, V : 2D arrays
         Stokes U and V arrays (shape: [Ntimes, Nfreqs]).
+    
+    Returns
+    -------
+    U_no_delay, V_no_delay : 2D arrays
+        Stokes U and V arrays with the delay inverted (shape: [Ntimes, Nfreqs]).
     """
+
     # Assign units if not given
     if not isinstance(delay, u.quantity.Quantity):
         delay = delay * u.ns
@@ -238,6 +294,11 @@ def get_spectra(Q, U, freq,  t_range=[0,None], f_range=[0,None], normalize=True,
     f_range : Frequency range to get the spectrum for (in indices) [start, stop].
     normalize : If True, normalize the spectra by L.
     replace_nans : If True, replace NaNs with 0 in the normalized spectra.
+
+    Returns
+    -------
+    Q_spec_norm : Normalized Q spectrum (shape: [Nfreqs,]).
+    U_spec_norm : Normalized U spectrum (shape: [Nfreqs,]).
     """
     
     # Time average
@@ -272,8 +333,8 @@ def rm_synthesis(P_spec, phi_array, b, K):
     ----------
     P_spec : Normalized complex P spectrum (shape: [Nfreqs,]).
     phi_array : Array of phi values to compute the FDF for (shape: [N_phi,]). In rad.
-    b : Pre-computed exponential term for the FDF calculation (shape: [N_phi, Nfreqs]).
-    K : Normalization constant for the FDF calculation.
+    b : Pre-computed exponential term, e^{-2i phi lambda^2}, for the FDF calculation (shape: [N_phi, Nfreqs]).
+    K : Normalization constant (1/W) for the FDF calculation.
 
     Returns
     -------
@@ -282,9 +343,6 @@ def rm_synthesis(P_spec, phi_array, b, K):
     """
 
     # Compute FDF
-    # K = 1.0 / np.nansum(W)  # normalization constant
-    # a = (-2.0 * 1j * phi_array).astype('complex64')
-    # b = np.outer(a, lambda_sq)  # shape (Nphi, Nlambda2)
     FDF = K * np.sum(P_spec * b, 1)  # sum along lambda axis & normalize
 
     # Find phi where peak FDF occurs (= RM)

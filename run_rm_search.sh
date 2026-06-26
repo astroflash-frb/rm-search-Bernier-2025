@@ -26,7 +26,7 @@ echo "Environment loaded"
 INDEX=${SLURM_ARRAY_TASK_ID}
 STEP_LIST=(160 460 760 1060 1360 1660 1960 2260 2560 2860 3160 \
            3460 3760 4060 4360 4660 4960 5260 5560 5860 6160 6460 \
-           6760 7060 7360 7660 7960 8260 8560 8860)  #(1 4 8 16 32 48 64 96 128 192 256)  # number of channels
+           6760 7060 7360 7660 7960 8260 8560 8860)  # list of param values to use for array job
 PARAM_VARY=start_file_ind  # name of parameter being varied (e.g. "search_downsamp_factor")
 # Things to update when changing the parameter to vary:
 # 1) Update the STEP_LIST with the desired values of the parameter to vary 
@@ -40,8 +40,7 @@ PARAM_VARY=start_file_ind  # name of parameter being varied (e.g. "search_downsa
 SOURCE=2022_CHIME_B2111+46
 SOURCE_DIR=/scratch/abernier/pulsar_data/${SOURCE}
 OBS_NIGHT=20220826T064420Z
-# DM=141.26  # pc/cm**3
-DM=145.0
+DM=141.26  # pc/cm**3
 RM=-218.70  # rad/m**2
 DELAY=-2.0  # ns
 
@@ -57,8 +56,8 @@ PHI_MAX=1500
 DPHI_SCALING=0.05
 RFI_MEAN_THRESHOLD=1.7
 RFI_STD_THRESHOLD=1.3
-SEARCH_DOWNSAMP_FACTOR=1
-COMPUTE_CROSS_CORR_FLAG=0  # 0 to skip computing the cross-correlation of FDF with FSF (saves time and memory when not needed))
+SEARCH_DOWNSAMP_FACTOR=1  # downsampling factor when computing FDF **redundant with NPIXELS_TO_AVG
+COMPUTE_CROSS_CORR_FLAG=0  # 0 to skip computing the cross-correlation of FDF with FSF (saves time and memory when not needed)
 
 # Simulated burst parameters
 SIM_FLAG=0  # Set to 1 to inject simulated bursts, 0 to run without

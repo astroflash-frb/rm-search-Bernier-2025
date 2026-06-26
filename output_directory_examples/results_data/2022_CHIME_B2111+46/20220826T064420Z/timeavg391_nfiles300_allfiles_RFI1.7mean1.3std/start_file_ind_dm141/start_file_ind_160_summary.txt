@@ -1,0 +1,55 @@
+================================================================================
+RM SEARCH SUMMARY
+================================================================================
+
+[FILES]
+Source directory : /scratch/abernier/pulsar_data/2022_CHIME_B2111+46
+Observation night: 20220826T064420Z
+Arrays file      : /scratch/abernier/pulsar_data/search_results/2022_CHIME_B2111+46/20220826T064420Z/timeavg391_nfiles300_allfiles_RFI1.7mean1.3std/start_file_ind_dm141/start_file_ind_160_arrays.npz
+Metadata file    : /scratch/abernier/pulsar_data/search_results/2022_CHIME_B2111+46/20220826T064420Z/timeavg391_nfiles300_allfiles_RFI1.7mean1.3std/start_file_ind_dm141/start_file_ind_160_metadata.npz
+Timing file      : /scratch/abernier/pulsar_data/search_results/2022_CHIME_B2111+46/20220826T064420Z/timeavg391_nfiles300_allfiles_RFI1.7mean1.3std/start_file_ind_dm141/start_file_ind_160_timings.npz
+
+[DATA]
+Total number of frames loaded        : ~477068750 (~20.355 min)
+Read 300 files (15000000 frames = 38.400 s) into memory
+Number of frames after de-dispersion : 13927964 (35.656 s)
+Number of frames after downsampling  : 35621 (35.655 s)
+Stokes shape           : (4, 35621, 1024) (Nstokes, Ntimes, Nfreqs)
+Frequency range        : 400.20 - 800.20 MHz
+Time duration          : 35.654 s
+Time resolution (dt)   : 1.0010 ms
+Frequency resolution   : 0.3906 MHz
+Corrected with a delay of -2.0 ns
+Dedispersed with DM of 141.26 pc / cm3
+
+[RM SEARCH]
+phi_max                    : 1500.000 rad/m^2
+dphi                       : 0.41160 rad/m^2
+RMSF FWHM                  : 8.23195 rad/m^2
+Nphi                       : 7291
+Search downsampling factor : 1
+New Ntime for RM search    : 35621
+Effective dt for RM search : 1.0010 ms
+
+[RFI MASKING]
+Num of masked channels : 300 / 1024
+Masked fraction        : 29.30 %
+Mean threshold         : 1.7
+Std threshold          : 1.3
+
+[SIMULATION]
+SIM_FLAG        : 0
+
+[TIMINGS]
+total                     | wall = 2259.693 s | cpu = 6805.619 s | eff = 3.012
+                          | peak mem = 638.039 GB
+read_and_dedisperse       | wall = 1729.518 s | cpu = 6277.498 s | eff = 3.630
+mask_and_normalize        | wall = 1.643 s | cpu = 1.635 s | eff = 0.995
+rmsf_computation          | wall = 0.185 s | cpu = 0.181 s | eff = 0.978
+rm_search                 | wall = 520.653 s | cpu = 518.640 s | eff = 0.996
+cross_correlation         | wall = 7.692 s | cpu = 7.664 s | eff = 0.996
+
+[DONE]
+Saved RM search arrays to /scratch/abernier/pulsar_data/search_results/2022_CHIME_B2111+46/20220826T064420Z/timeavg391_nfiles300_allfiles_RFI1.7mean1.3std/start_file_ind_dm141/start_file_ind_160_arrays.npz
+Saved metadata to /scratch/abernier/pulsar_data/search_results/2022_CHIME_B2111+46/20220826T064420Z/timeavg391_nfiles300_allfiles_RFI1.7mean1.3std/start_file_ind_dm141/start_file_ind_160_metadata.npz
+Saved timing results to /scratch/abernier/pulsar_data/search_results/2022_CHIME_B2111+46/20220826T064420Z/timeavg391_nfiles300_allfiles_RFI1.7mean1.3std/start_file_ind_dm141/start_file_ind_160_timings.npz

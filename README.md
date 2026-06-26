@@ -18,6 +18,8 @@ Disclaimer: This code has been implemented to run on the trillium cluster and so
 
 Each step has a python script which is accompanied by a corresponding shell script for launching (array) jobs. The `.sh` scripts handle parameter configuration, input/output paths, and SLURM job setup (including array jobs), so that the user can run each step by simply submitting `sbatch <script_name>.sh`. See `scripts/README.md` for a detailed description of each script, inputs, outputs, and saved products.
 
+See `requirements.txt` for necessary packages.
+
 
 ### RM Search
 
@@ -43,7 +45,7 @@ Functions: `scripts/pulse_utils.py`
 
 ### Plots
 
-Generates figures and summary plots from the search results.
+Generates figures and summary plots from the search results and pulse detection.
 
 Bash script: `run_plots.sh`
 
@@ -53,3 +55,4 @@ Functions: `scripts/plot_utils.py`
 
 
 
+`output_directory_examples` contains an example of the directory structure I used and where different files were saved. Some folders are empty and except a few .txt files, no file actually contains data. Some example figures are given in `timeavg391_nfiles300_allfiles_RFI1.7mean1.3std/SUBDIR_dm141`.

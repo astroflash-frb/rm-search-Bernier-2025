@@ -1,0 +1,8 @@
+numpy
+scipy
+astropy
+matplotlib
+chime_frb_constants
+pulsarbat
+https://github.com/CHIMEFRB/fitburst.git
+https://github.com/ninaneiman/baseband_operations.git

@@ -27,7 +27,7 @@ parser.add_argument("source_P0", type=float,
 parser.add_argument("source_W50", type=float,
                     help='Pulse width (W50) of the source in milliseconds.')
 parser.add_argument("tol", type=float,
-                    help='Minimum time separation (in ms) between detected peaks in FDF to be counted as separate pulses.')
+                    help='Minimum time separation (in ms) between detected peaks in FDF to be classified as separate pulses.')
 parser.add_argument("--pulse_search_downsamp_factor", type=int, default=8,
                     help='Downsampling factor to apply to FDF_arr before finding peaks for pulse detection.')
 parser.add_argument("--prominence_factor", type=float, default=10,
@@ -266,7 +266,7 @@ if __name__ == "__main__":
             prominence_factor=PROMINENCE_FACTOR,
             height=None,
             save_loc=BURST_DETECT_DIR,
-            save_name=f'detect_param_{p:.0f}.png'
+            save_name=f'detect_param_{p:.0f}'
         ) 
         num_pulses_detected_tot += num_pulses_detected
 

@@ -93,7 +93,7 @@ def separate_pulses(detections, time_tol):
     Helper function to separate peak detections into distinct bursts.
     """
 
-    bursts = []  # list of lift dicts: 1 element = 1 burst, dicts = all peaks found within that burst
+    bursts = []  # list of list of dicts: 1 element = 1 burst = list of dicts, dicts = all phi peaks found within a time slice
     burst_start_time = None
     current_burst = []
 

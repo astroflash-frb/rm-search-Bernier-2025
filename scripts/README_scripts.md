@@ -5,7 +5,8 @@ This document describes the implementation of each Python script in the RM searc
 
 ## 01_rm_search.py
 
-This python script is executed via `run_rm_search.sh`.
+This python script is executed via `run_rm_search.sh`. This script is meant to be run as an array job over some varied parameter (using `${STEP_LIST[$INDEX]}`). This could be the downsampling factor, the DM, the delay, the index of the first file to read in, etc. The start_file_index is what allows you to run the search on all the data for an observation night in chunks of nfiles. If the outdir is kept constant across array jobs, then the results of the search for a varied parameter will all be saved in the same directory, making it easy for scripts 02 and 03 to grab the data and analyze it all at once (or again as an array job). You can look at the output path section of `run_rm_search.sh` or the output directory examples to see how I kept track of different runs and how I organized my directories to work across all 3 scripts. 
+
 
 ### Inputs
 - `source_dir`: Absolute path to the directory of the astrophysical source to analyze. This directory must follow the structure of CHIME raw baseband data (in VDIF format). 
@@ -18,6 +19,8 @@ This python script is executed via `run_rm_search.sh`.
 
 
 ### Parameters
+Descriptions of all parameters are documented in the script (with their default values) and can also be viewed by running `--help`. The following are all optional.
+
 #### Source properties
 - true_dm_pc_cm3
 - true_rms_rad_m2
@@ -39,12 +42,17 @@ This python script is executed via `run_rm_search.sh`.
 - compute_cross_corr_flag
 
 #### Simulation parameters
+These are used to add bursts on top of real data.
+
 - sim_flag
 - sim_num_bursts
 - sim_arrival_times
 - sim_burst_widths
 - sim_snr
 - sim_rm
+
+
+**Note:** `npixels_to_avg` tells the code how much to downsample when going from baseband to Stokes data. Downsampling was initially done on the complex voltage signals, but with the current implementation, this downsampling happens later directly on the Stokes data. This means that the parameter is redundant with `search_downsamp_factor`, which tells the code how much to downsample the Stokes data before computing the FDF. Therefore, I suggest keeping `search_downsamp_factor=1` and using `npixels_to_avg` to control the downsampling since this reduces the data at an earlier step (and keeps the memory usage more reasonable). From the raw data, 391 times samples is what gives a resolution of ~1ms so it could also be simpler to keep npixels_to_avg set to 391 and use search_downsamp_factor in units of ms.
 
 
 ### Outputs
@@ -57,17 +65,59 @@ All outputs are saved in the same directory as `save_file`, with the following n
 
 
 ### Functions from `rm_search_utils.py`
+- print_mem(msg)
+- read_stokes(...)
+- flag_rfi_manual(ranges, freqs)
+- get_rfi_mask(...)
+- normalize_data(data_array)
+- slice_around_burst(full_stokes, time, slice_width)
+- invert_delay(delay, freq, U, V)
+- get_spectra(Q, U, freq, ...)
+- rm_synthesis(P_spec, phi_array, b, K)
+
+See documentation for more information
+
 
 ### Functions from `sim_burst_utils.py`
+- compute_timeseries_sigma(full_stokes)
+- gen_sim_burst_params(...)
+- gen_stokes_I(...)
+- gen_stokes_QUV(...)
+- apply_rm(I, Q, U, RM, freq)
+- get_rot_stokes(...)
+
+See documentation for more information
 
 
-
-
+---
+---
 
 ## 02_pulse_detection.py
 
+This script processes all results contained within a single output directory produced by 01_rm_search.py and attempts to detect pulses in every FDF. This means that if the RM search is run as an array job over some varied parameter and the results are saved in the same outdir, this script will access all results over that varied parameter. Information about all detected pulse in each FDF are saved, as well as overall results across all runs. Therefore, the total counts only really make sense when the varied parameter in the search is the start_file_index.
+
+This script can also be run as an array job, mainly to vary the downsampling factor but it should also work to vary the tolerance or prominence factor (see parameters section below) with only minor modifications. The main thing is that the output subdirectories for all the different results of the array job are hardcoded to use the `pulse_search_downsamp_factor` value to differentiate them.
 
 
+### Inputs
+- `results_dir`: Absolute path to directory containing RM search results.
+- `save_fig_dir`: Absolute path to directory where pulse detection results should be saved.
+- `source_P0`: Pulse period (P0) of the source.
+- `source_W50`: Pulse width (W50) of the source.
+- `tol`: Minimum time separation between detected peaks in FDF to be classified as separate pulses. 
+
+### Parameters
+- pulse_search_downsamp_factor: controls how much the FDF is averaged before stepping through each time sample to find peaks along the phi axis.
+- prominence_factor
+- plot_detected_pulses
+
+
+
+See comment at end of 02_pulse_detection.py for more information on output format
+
+
+---
+---
 
 ## 03_plot_search_results.py
 

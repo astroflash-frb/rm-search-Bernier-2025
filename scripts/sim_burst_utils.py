@@ -10,7 +10,18 @@ from astropy.constants import c
 def compute_timeseries_sigma(full_stokes):
     """
     Compute statistics for raw freq-averaged timeseries, returning the standard deviation.
+
+    Parameters
+    ----------
+    full_stokes : array-like
+        Full Stokes data (shape: [4, Nfreqs, Ntimes]) with Stokes I, Q, U, V in the first dimension.
+    
+    Returns
+    -------
+    sigma_time : float
+        Standard deviation of the freq-averaged Stokes I timeseries.
     """
+
     I = full_stokes[0]  # (Ntimes, Nfreqs)
     I_avg = np.nanmean(I, axis=1)  # avg over freqs, (Ntimes,)
     sigma_time = np.nanstd(I_avg)  # noise level in time series
@@ -22,6 +33,8 @@ def gen_sim_burst_params(num_bursts, arrival_times, burst_widths, freq):
     """
     Generate parameters for simulating bursts with fitburst.
 
+    Parameters
+    ----------
     num_bursts : int
         Number of bursts to simulate.
     arrival_times : list of floats
@@ -29,7 +42,8 @@ def gen_sim_burst_params(num_bursts, arrival_times, burst_widths, freq):
         Must be contained within the time range of the input data.
     burst_widths : list of floats
         List of widths for the simulated bursts (in seconds, or whatever time unit the data uses).
-    
+    freq : array-like
+        Frequency array (shape: [Nfreqs]). In MHz.
     """
 
     ref_freq = np.median(freq)
@@ -117,9 +131,7 @@ def gen_stokes_QUV(I_components, num_bursts, pol_frac_linear, pol_frac_circular,
 
 def apply_rm(I, Q, U, RM, freq):
     """
-    Apply rotation measure to Stokes Q and U.
-
-    Return the rotated Q and U parameters.
+    Apply rotation measure to Stokes Q and U. Returns the rotated Q and U parameters.
 
     Parameters
     ----------
@@ -129,6 +141,7 @@ def apply_rm(I, Q, U, RM, freq):
     RM : Rotation measure (shape: [Nfreqs]). In rad/m^2.
     freq : Frequency array (shape: [Nfreqs]). In MHz.
     """
+    
     # Change zeros to NaN in off-burst region
     mask = (I < 1e-7)  # approx that off-burst is where 1e-7
     Q[mask] = np.nan
