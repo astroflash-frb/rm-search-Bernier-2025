@@ -89,6 +89,7 @@ See documentation for more information
 See documentation for more information
 
 
+
 ---
 ---
 
@@ -106,18 +107,50 @@ This script can also be run as an array job, mainly to vary the downsampling fac
 - `source_W50`: Pulse width (W50) of the source.
 - `tol`: Minimum time separation between detected peaks in FDF to be classified as separate pulses. 
 
+
 ### Parameters
 - pulse_search_downsamp_factor: controls how much the FDF is averaged before stepping through each time sample to find peaks along the phi axis.
-- prominence_factor
-- plot_detected_pulses
+- prominence_factor: parameter used in scipy.find_peaks() to 
+- plot_detected_pulses: flag to produce all pulse plots (see `start_file_ind_dm141/tol200/burst_detected_downsamp4_tol200`) in the example figures directory.
 
 
+### Outputs 
+All outputs are saved either directly in the input `save_fig_dir` or in subdirectories automatically created by the script. The naming convention is:
 
-See comment at end of 02_pulse_detection.py for more information on output format
+- `{save_fig_dir}/burst_visible_info.npz`: contains information about pulses visible in Stokes I.
+- `{save_fig_dir}/tol{tol_value}/burst_detected_downsamp{pulse_search_downsamp_factor}_tol{tol_value}`: subdirectory for burst detection plots
+- `{save_fig_dir}/tol{tol_value}/burst_detected_info_downsamp{pulse_search_downsamp_factor}_tol{tol_value}.npz`: file to save detected bursts info
+- `{save_fig_dir}/tol{tol_value}/summary_downsamp{pulse_search_downsamp_factor}_tol{tol_value}.txt`: summary file
+
+
+See comment at end of 02_pulse_detection.py for more information on output format.
+
+**Note:** When this script is run as an array job, all runs use the same Stokes data, while only the pulse detection parameters (e.g., pulse_search_downsamp_factor, tol, or prominence_factor) change. As a result, the visible pulses in Stokes I are identical for every job and only need to be saved once. To avoid multiple jobs attempting to write the same file simultaneously, burst_visible_info.npz is only written when PULSE_SEARCH_DOWNSAMP_FACTOR == 4 (currently hardcoded; see line 335). The visible pulses are still computed by all simultaneous jobs in the first set of the array job, but only one job saves the results. Jobs check whether the file alredy exists, and if it does they simply load the data, meaning that all subsequent jobs do not recompute the visible pulses.
+
+
+### Functions from `pulse_utils.py`
+- count_visible_pulses(...)
+- downsample_time_mean(data, time, factor)
+- separate_pulses(detections, time_tol)
+- plot_pulses(...)
+- find_pulses_fdf(...)
+- count_found_notvisible(detected_bursts, visible_groups, time_arr_vis)
+
 
 
 ---
 ---
 
 ## 03_plot_search_results.py
+
+### Inputs
+
+
+### Parameters
+
+
+### Outputs
+
+
+### Functions from `plot_utils.py`
 

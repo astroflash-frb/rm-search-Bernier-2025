@@ -32,8 +32,8 @@ SOURCE_W50=60.5  # pulse width in ms
 LIST=(2 4 6 8 10 12 14 16)  # varying downsampling factor
 INDEX=$((SLURM_ARRAY_TASK_ID))  # index for array job to specify which parameter value to use for this job
 PULSE_SEARCH_DOWNSAMP_FACTOR=${LIST[$INDEX]}  # downsampling factor to apply to FDF_arr before pulse detection
-PROMINENCE_FACTOR=10  # prominence cutoof factor to apply when finding peaks in FDF
-TOL=200  # min distance bw peaks for them to be counted as 2 peaks (in ms)
+PROMINENCE_FACTOR=10  # prominence cutoff factor to apply when finding peaks in FDF
+TOL=200  # min distance bw peaks for them to be counted as 2 distinct peaks (in ms)
 PLOT_DETECTED_PULSES=1  # whether to save plots of detected pulses in FDF for each parameter value (1 to save, 0 to not save)
 
 # Input & output paths (assuming same hierarchy as search script output)
