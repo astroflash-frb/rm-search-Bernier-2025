@@ -33,25 +33,33 @@ plt.rcParams.update({
 
 # --- 4-panels plot function ---
 def plot_stokes(data_array, freq, time, t_unit='s', suptitle='', 
-                rfi_masked=None, height_ratios=[1, 3], cbar_lim_max=None, 
-                save_name=None, save_loc=None):
+                cbar_lim_max=None, save_name=None, save_loc=None):
     """
     Plot Stokes parameters I, Q, U, V in a 2x2 grid.
 
     Parameters
     ----------
-    data_array : Array of the 4 Stokes parameters in the order I, Q, U, V. Shape (Nstokes, Ntimes, Nfreqs).
-    freq : Frequency array (MHz).
-    time : Time array (in t_unit).
-    t_unit : Defines the unit for the time array (e.g., 'ms', 's').
-    suptitle : Title for the entire figure.
-    rfi_masked : List of RFI channels to highlight in red.
-    height_ratios : Height ratio of the top/bottom panels for each Stokes subplot.
-    cbar_lim_max : Max absolute value for the colorbar limits. If None, limits are set to the 5th and 95th percentiles of Stokes I.
+    data_array : np.ndarray
+        Array of the 4 Stokes parameters in the order I, Q, U, V. Shape (Nstokes, Ntimes, Nfreqs).
+    freq : np.ndarray
+        Frequency array (MHz).
+    time : np.ndarray
+        Time array (in t_unit).
+    t_unit : string
+        Defines the unit for the time array (e.g., 'ms', 's').
+    suptitle : string
+        Title for the entire figure.
+    cbar_lim_max : 
+        Max absolute value for the colorbar limits. If None, limits are set to the 5th and 95th percentiles of Stokes I.
+    save_name : str, optional
+        Name for the saved figure (without extension). If None, the figure is not saved.
+    save_loc : str, optional
+        Absolute path to the directory where the figure should be saved. If None, the figure is not saved.
     """
     
     # Figure info
     fig = plt.figure(figsize=(10, 11), dpi=150)
+    height_ratios=[1, 3]
     outer = gridspec.GridSpec(2, 2, hspace=0.15, wspace=0.35)  # 2x2 grid for Stokes parameters
     extent = (time[0], time[-1], freq[0], freq[-1])
     plt.suptitle(suptitle)
@@ -89,6 +97,7 @@ def plot_stokes(data_array, freq, time, t_unit='s', suptitle='',
             vmax = cbar_lim_max
             vmin = -vmax
         linear = plt.cm.colors.Normalize(vmin=vmin, vmax=vmax)
+        
         # Plot data
         im = stokes_ax.imshow(data_plot.T, 
                        origin='lower', 
@@ -105,10 +114,6 @@ def plot_stokes(data_array, freq, time, t_unit='s', suptitle='',
                             anchor=(1.65, anchor_height), extend='both'
                             )
         # cbar.set_label(cbar_label)
-        
-        # --- Highlight RFI channels ---
-        # if rfi_masked is not None:
-        #     add_rfi_rectangles(stokes_ax, rfi_masked, freq=freq, time=time)
 
         # --- Axes labels ---
         if i >= 2:
@@ -125,17 +130,37 @@ def plot_stokes(data_array, freq, time, t_unit='s', suptitle='',
     
 
 def plot_rmsf(phi_array, RMSF, RMSF_full, save_loc=None, save_name='RMSF'):
+    """
+    Plot the RMSF (Rotation Measure Spread Function) with and without masked channels.
+
+    Parameters
+    ----------
+    phi_array : np.ndarray
+        Array of phi values (rad/m^2).
+    RMSF : np.ndarray
+        RMSF computed with masked channels.
+    RMSF_full : np.ndarray
+        RMSF computed with all channels (no masking).
+    save_loc : str, optional
+        Absolute path to the directory where the figure should be saved. If None, the figure is not saved.
+    save_name : str, optional
+        Name for the saved figure (without extension). Defaults to 'RMSF'.
+    """
+
     plt.figure(figsize=(8, 5))
     plt.title('RMSF')
     
+    # Plot RMSF with and without masked channels
     plt.plot(phi_array, np.abs(RMSF), lw=1.2, label='w/ Masked Channels')
     plt.plot(phi_array, np.abs(RMSF_full), lw=1, alpha=0.5, c='k', label='All Channels')
     plt.xlim(-500,500)
     
+    # Axes & Labels
     plt.xlabel(r'$\phi$ [rad/m$^2$]')
     plt.ylabel('Amplitude')
     plt.legend(loc='upper right')
 
+    # Save Figure
     if save_name is not None and save_loc is not None:
         plt.savefig(save_loc + save_name + ".png", dpi=150)
     plt.close()
@@ -143,19 +168,35 @@ def plot_rmsf(phi_array, RMSF, RMSF_full, save_loc=None, save_name='RMSF'):
 
 
 def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='',
-                 ax1_type='peak', ax2_ylabel=r'$\phi$ [rad/m$^2$]', t_unit='s',
+                 ax2_ylabel=r'$\phi$ [rad/m$^2$]', t_unit='s',
                  xlim=None, ylim=None, suptitle=None, save_name=None, save_loc=None):
     """
-    Make a 2-panel phi/time plot of some data.
+    Make a 2-panel phi/time waterfall plot of some data. Top panel shows the peak amplitude in the timeseries.
 
     Parameters
     ----------
-    data : Data to plot (shape: [Ntimes, Nphi]). Absolute value is taken.
-    time : Time array (shape: [Ntimes]).
-    phi : Phi array (shape: [Nphi]).
-    cbar_label : Colorbar label.
-    ax1_type : Type of the first panel ('peak' for peak amplitude, 'mean' for mean amplitude).
-    t_unit : Unit for the time axis (e.g., 'ms', 's').
+    data : np.ndarray
+        Data to plot (shape: [Ntimes, Nphi]). Absolute value is taken.
+    time : np.ndarray
+        Time array (shape: [Ntimes]).
+    phi : np.ndarray
+        Phi array (shape: [Nphi]).
+    cbar_label : str
+        Colorbar label.
+    ax2_ylabel : str
+        Y-axis label for the main imshow panel (bottom).
+    t_unit : 
+        Unit for the time axis (e.g., 'ms', 's').
+    xlim : tuple, optional
+        X-axis limits for the main imshow panel (bottom). If None, limits are set to the min and max of the time array.
+    ylim : tuple, optional
+        Y-axis limits for the main imshow panel (bottom). If None, limits are set to the min and max of the phi array.
+    suptitle : str, optional
+        Title for the entire figure.
+    save_name : str, optional
+        Name for the saved figure (without extension). If None, the figure is not saved.
+    save_loc : str, optional
+        Absolute path to the directory where the figure should be saved. If None, the figure is not saved.
     """
 
     # Define figure with 2 rows, 3 columns
@@ -180,10 +221,9 @@ def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='',
     #     ax1.legend(loc='upper left')
 
     # AX1: Get peak (or avg) for each time slice
-    peak = np.max(np.abs(data), axis=1) if ax1_type=='peak' else np.mean(np.abs(data), axis=1)
+    peak = np.max(np.abs(data), axis=1)
     ax1.plot(time, peak, lw=0.8, c='rebeccapurple')
-    ax1_label = 'Peak Amp.' if ax1_type == 'peak' else 'Avg. Amp.'
-    ax1.set_ylabel(ax1_label)
+    ax1.set_ylabel('Peak Amp.' )
 
     # AX2: Plot data (imshow)
     extent = (time[0], time[-1], phi[0], phi[-1])
@@ -220,14 +260,34 @@ def plot_2panels(data, time, phi, downsamp_factor=8, cbar_label='',
 
 def plot_cross_corr_slices(phi_lags, cross_corr_arr, time, true_RMs=None,
                            save_name=None, save_loc=None):
+    """
+    Plot the cross-correlation of the FDF with the RMSF, downsampled by a factor of 8, with vertical lines at the true RM values.
+    
+    Parameters
+    ----------
+    phi_lags : np.ndarray
+        Array of phi lag values (rad/m^2).
+    cross_corr_arr : np.ndarray
+        Array of cross-correlation values (shape: [Ntimes, Nphi_lags]).
+    time : np.ndarray
+        Array of time values corresponding to the time axis in cross_corr_arr.
+    true_RMs : list or np.ndarray, optional
+        List or array of true RM values (rad/m^2) to plot as vertical lines. If None, no vertical lines are plotted.
+    save_name : str, optional
+        Name for the saved figure (without extension). If None, the figure is not saved.
+    save_loc : str, optional
+        Absolute path to the directory where the figure should be saved. If None, the figure is not saved.
+    """
     
     plt.figure(figsize=(9, 6))
     plt.title('Cross-Correlation of FDF with RMSF (downsampled by 8)')
 
-   # Downsample & plot data
+   # Downsample data
     if cross_corr_arr.shape[0] <= 8:
-        print("Warning: Cross-correlation has very few phi bins, downsampling may not be meaningful.")
+        print("Warning: Cross-correlation has very few time bins, downsampling may not be meaningful.")
     downsampled_cross_corr, _ = downsample_time_mean(cross_corr_arr, time, factor=8)
+    
+    # Plot each downsampled slice
     for i,t_slice in enumerate(downsampled_cross_corr):
         plt.plot(phi_lags, abs(t_slice), color='k', alpha=0.2, lw=0.7)
     plt.plot([], [], color='black', alpha=1, lw=1, label='FDFs')  # for slice label
@@ -255,6 +315,10 @@ def plot_cross_corr_slices(phi_lags, cross_corr_arr, time, true_RMs=None,
 
 
 def scale_lightness(rgb, scale_l):
+    """
+    Helper function to scale the lightness of an RGB color by a given factor.
+    """
+
     # convert rgb to hls
     h, l, s = colorsys.rgb_to_hls(*rgb)
     # manipulate h, l, s values and return as rgb
@@ -262,6 +326,10 @@ def scale_lightness(rgb, scale_l):
 
 
 def get_colors(num_colors):
+    """
+    Helper function to get a list of colors for plotting, with light and dark variants for each color.
+    """
+
     tab = 'tab10' if num_colors<=10 else 'tab20'
     cmap = plt.colormaps[tab]
     
@@ -272,7 +340,6 @@ def get_colors(num_colors):
     colors_dark = [scale_lightness(c, 0.5) for c in colors_rgb]
 
     return colors_light, colors_dark
-
 
 
 def plot_timings_by_block(param_list, metadata_dict, timings_dict, param_label,
@@ -391,6 +458,40 @@ def plot_timings_by_block(param_list, metadata_dict, timings_dict, param_label,
 def plot_bursts_in_fdf(p, stokes_I, time_arr, phi_arr, visible_dict, downsamp_list,
                        results_params_all_downsamp, param_label, rm_true,
                        save_name=None, save_loc=None):
+    """
+    Produce a 2-panel plot showing the S/N of Stokes I over time (bottom panel) and 
+    the detected bursts in the FDF (top panel) for a single parameter value of the RM search. 
+    The top panel of the plot contains results for all results of the pulse detection (eg. varied pulse downsampling factor).
+
+    Parameters
+    ----------
+    p : float
+        The value of the varied parameter in the RM search for which to plot the bursts.
+    stokes_I : np.ndarray
+        2D array of Stokes I values (shape: [Ntimes, Nfreqs]).
+    time_arr : np.ndarray
+        Time values corresponding to the Stokes I data. 
+        This does not have to match the time axis of the FDF.
+    phi_arr : np.ndarray
+        Array of phi values (rad/m^2) corresponding to the FDF.
+    visible_dict : dict
+        Dictionary containing information about which bursts are visible for each parameter value.
+    downsamp_list : list
+        List of downsampling factors used in 02_pulse_detection.py that we want to plot.
+    results_params_all_downsamp : list of dicts
+        List of dictionaries containing the results for each downsampling factor.
+        Each dictionary corresponds to the "params" results for the output of 
+        02_pulse_detection.py for a given downsampling factor. See the structure of the output of 02_pulse_detection.py for details.
+    param_label : str
+        Label for the varied parameter in the RM search.
+    rm_true : list or np.ndarray
+        List or array of true RM values (rad/m^2) to plot as horizontal lines in the top panel.
+    save_name : str, optional
+        Name for the saved figure (without extension). If None, the figure is not saved.
+    save_loc : str, optional
+        Absolute path to the directory where the figure should be saved. If None, the figure is not saved.
+    """
+
     # ----- Define figure -----
     fig, (ax_top, ax_bot) = plt.subplots(
         2, 1,
@@ -465,7 +566,7 @@ def plot_bursts_in_fdf(p, stokes_I, time_arr, phi_arr, visible_dict, downsamp_li
             ax_top.scatter(np.mean(burst_times), np.mean(phi_mean), 
                            s=s, marker=m, color=colors[i], 
                            lw=lw, alpha=alpha, 
-                           label=f"downsamp factor = {downsamp_list[i]:.0f}")
+                           label=f"downsamp factor = {downsamp:.0f}")
          
     # ----- Plot True RM -----
     for rm in rm_true:

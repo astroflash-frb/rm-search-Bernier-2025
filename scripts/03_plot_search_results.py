@@ -20,15 +20,19 @@ parser = argparse.ArgumentParser()
 parser.add_argument("results_dir", type=str,
                     help='Absolute path to directory containing search results.')
 parser.add_argument("save_fig_dir", type=str, 
-                    help='Absolute path to directory where figures should be saved.')
+                    help='Absolute path to directory where figures should be saved. ' \
+                    'This directory must contain the results from 02_pulse_detection.py.')
 parser.add_argument("tol", type=float,
                     help="Tolerance value to plot results for.")
 parser.add_argument("--param_label", type=str, default=None,
-                    help='Label for the x-axis corresponding to the varied parameter (e.g., "Downsampling Factor", "DM [pc/cm^3]").')
+                    help='Label for the x-axis corresponding to the varied parameter in the RM search ' \
+                    '(e.g., "Downsampling Factor", "DM [pc/cm^3]").')
 parser.add_argument("--data_files_unique", type=int, default=1,
                     help='Flag to indicate whether the masked+normalized Stokes data is ' \
                     'the same for all values of the varied parameter (1) or if it changes ' \
                     'with each run (0).')
+parser.add_argument("--plot_cross_corr", type=int, default=1,
+                    help='Flag to indicate whether to plot the cross-correlation of the FDF with the RMSF (1) or not (0).')
 args = parser.parse_args()
 
 # Variables
@@ -38,6 +42,7 @@ TOL = args.tol
 PARAM_LABEL = args.param_label if args.param_label is not None else "Varied Parameter"
 DATA_FILES_UNIQUE = args.data_files_unique   # determines if masked+normalized stokes data is the same for all values of the varied params or not
                                              # True if data is unique, false if data changes with each run of param
+PLOT_CROSS_CORR = args.plot_cross_corr  # determines if cross-correlation of FDF with RMSF should be plotted or not
 
 
 # Get RM search result files
@@ -186,10 +191,12 @@ if __name__ == "__main__":
                         t_unit='s', save_name=label_stokes, save_loc=SAVE_FIG_DIR+'/stokes/')
 
             # Plot RMSF
-            # RMSF = data[p]['RMSF']  # shape (Nphi,)
-            # RMSF_full = data[p]['RMSF_full']  # shape (Nphi,)
-            # phi_array = data[p]['phi_array']  # shape (Nphi,)
-            # plot_rmsf(phi_array, RMSF, RMSF_full, save_name=label_rmsf, save_loc=SAVE_FIG_DIR+'/RMSFs/')
+            if PLOT_CROSS_CORR:
+                RMSF = data[p]['RMSF']  # shape (Nphi,)
+                RMSF_full = data[p]['RMSF_full']  # shape (Nphi,)
+                phi_array = data[p]['phi_array']  # shape (Nphi,)
+                os.makedirs(SAVE_FIG_DIR+'/RMSFs/', exist_ok=True)  # make directory if it doesn't exist
+                plot_rmsf(phi_array, RMSF, RMSF_full, save_name=label_rmsf, save_loc=SAVE_FIG_DIR+'/RMSFs/')
 
             if DATA_FILES_UNIQUE:  # if data is the same for all runs, only plot once
                 break
@@ -207,8 +214,6 @@ if __name__ == "__main__":
         FDF_arr = data[p]['FDF_arr']  # shape (Ntime_fdf, Nphi)
         time_slice_arr = data[p]['time_slice_arr']  # shape (Ntime_fdf,)
         phi_array = data[p]['phi_array']  # shape (Nphi,)
-        # cross_corr_arr = data[p]['cross_corr_arr']  # shape (Ntime_fdf, Nphi_lags)
-        # phi_lags = data[p]['phi_lags']  # shape (Nphi_lags,)
 
         # ----- FDF - imshow -----
         if not fdf_exists:
@@ -218,17 +223,24 @@ if __name__ == "__main__":
         else:
             print(f"FDF plots already exist at {fdf_dir}. Skipping FDF plotting step!")
     
-        # ----- Cross-correlation - imshow -----
-        # plot_2panels(cross_corr_arr, time_slice_arr, phi_lags, ylim=(-1500,1500),
-        #              cbar_label='Amplitude', suptitle='Cross-correlation',
-        #              save_name=f'/crosscorr_param_{p}', save_loc=SAVE_FIG_DIR)
-    
-        # ----- Cross-correlation - slices plot -----
-        # plot_cross_corr_slices(phi_lags, cross_corr_arr, time,
-        #                        true_RMs=rm_true,
-        #                        save_name=f'/crosscorr_slices_param_{p}',
-        #                        save_loc=SAVE_FIG_DIR
-        #                        )
+        # ----- Cross-correlation - imshow & slices -----
+        if PLOT_CROSS_CORR:
+            # get cross-correlation data
+            cross_corr_arr = data[p]['cross_corr_arr']  # shape (Ntime_fdf, Nphi_lags)
+            phi_lags = data[p]['phi_lags']  # shape (Nphi_lags,)
+            os.makedirs(SAVE_FIG_DIR+"/crosscorr/", exist_ok=True)
+
+            # inshow
+            plot_2panels(cross_corr_arr, time_slice_arr, phi_lags, ylim=(-1500,1500),
+                         cbar_label='Amplitude', suptitle='Cross-correlation',
+                         save_name=f'crosscorr_param_{p}', save_loc=SAVE_FIG_DIR+"/crosscorr/")
+        
+            # slices plot 
+            plot_cross_corr_slices(phi_lags, cross_corr_arr, time,
+                                   true_RMs=rm_true,
+                                   save_name=f'crosscorr_slices_param_{p}',
+                                   save_loc=SAVE_FIG_DIR+"/crosscorr/"
+                                   )
 
         # ----- Plot visible + detected bursts in FDF -----
         plot_bursts_in_fdf(p, stokes_arr[0], time_arr, phi_array, visible_dict, downsamp_list,

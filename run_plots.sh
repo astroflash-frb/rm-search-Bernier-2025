@@ -38,13 +38,16 @@ mkdir -p "$SAVE_FIG_DIR"  # create output directory if it doesn't exist
 PARAM_LABEL="Start File Index"  # Label for the x-axis corresponding to the varied parameter (e.g., 'Downsampling Factor', 'DM [pc/cm^3]')
 DATA_FILES_UNIQUE=0  # 1 to plot stokes only once, 0 to plot stokes for each param value 
 TOL=200  # tol to plot results for
+PLOT_CROSS_CORR=1  # 1 to plot cross-correlation of FDF with RMSF, 0 to skip
 
 
 # Run plotting script
 cd /home/abernier/scratch/rm-search-Bernier-2025/scripts
 echo "03_plot_search_results.py ${RESULTS_DIR} ${SAVE_FIG_DIR} ${TOL}\
       --param_label \"${PARAM_LABEL}\" \
-      --data_files_unique ${DATA_FILES_UNIQUE}"
+      --data_files_unique ${DATA_FILES_UNIQUE} \
+      --plot_cross_corr ${PLOT_CROSS_CORR}"
 python 03_plot_search_results.py ${RESULTS_DIR} ${SAVE_FIG_DIR} ${TOL}\
       --param_label "${PARAM_LABEL}" \
-      --data_files_unique ${DATA_FILES_UNIQUE}
+      --data_files_unique ${DATA_FILES_UNIQUE} \
+      --plot_cross_corr ${PLOT_CROSS_CORR}
