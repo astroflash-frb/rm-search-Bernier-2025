@@ -56,4 +56,4 @@ Functions: `scripts/plot_utils.py`
 
 
 ## Examples
-`output_directory_examples` contains an example of the directory structure I used and where different files were saved. Some folders are empty and except a few .txt files, no file actually contains data. Some example figures are given in `timeavg391_nfiles300_allfiles_RFI1.7mean1.3std/SUBDIR_dm141`.
+`output_directory_examples` contains an example of the directory structure I used and where different output files were saved. Most folders are empty and, apart from a few .txt files, the files do not contain any actual data. Example figures are provided in `timeavg391_nfiles300_allfiles_RFI1.7mean1.3std/SUBDIR_dm141`, and `RM_search_plots.pdf` contains most of these figures along with brief explanations of how they were produced.

@@ -236,7 +236,7 @@ if __name__ == "__main__":
                          save_name=f'crosscorr_param_{p}', save_loc=SAVE_FIG_DIR+"/crosscorr/")
         
             # slices plot 
-            plot_cross_corr_slices(phi_lags, cross_corr_arr, time,
+            plot_cross_corr_slices(phi_lags, cross_corr_arr, time_slice_arr,
                                    true_RMs=rm_true,
                                    save_name=f'crosscorr_slices_param_{p}',
                                    save_loc=SAVE_FIG_DIR+"/crosscorr/"

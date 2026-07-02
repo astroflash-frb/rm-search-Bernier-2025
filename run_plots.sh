@@ -29,7 +29,7 @@ OBS_NIGHT=20220826T064420Z
 
 # Input & output paths (assuming same hierarchy as search script output)
 SETTINGS=timeavg391_nfiles300_allfiles_RFI1.7mean1.3std
-SUBDIR=start_file_ind_dm135
+SUBDIR=start_file_ind_dm141
 RESULTS_DIR=/scratch/abernier/results_data/${SOURCE}/${OBS_NIGHT}/${SETTINGS}/${SUBDIR}  # input
 SAVE_FIG_DIR=/scratch/abernier/results_figures/${SOURCE}/${OBS_NIGHT}/${SETTINGS}/${SUBDIR}   # input+output
 mkdir -p "$SAVE_FIG_DIR"  # create output directory if it doesn't exist

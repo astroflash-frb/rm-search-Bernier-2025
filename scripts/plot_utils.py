@@ -306,7 +306,7 @@ def plot_cross_corr_slices(phi_lags, cross_corr_arr, time, true_RMs=None,
     plt.ylabel('Amplitude')
     plt.xlim(-700, 700)
     plt.legend(loc='upper left', bbox_to_anchor=(1.02, 1))
-    plt.ylim(5, 11)
+    plt.ylim(5, 15)
 
     if save_name is not None:
         plt.savefig(save_loc + save_name + '.png', dpi=150)
